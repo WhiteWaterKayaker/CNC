@@ -1,0 +1,3410 @@
+// Flats - Generates CNC G-Code for milling flats on tool joints.
+// Developed with Borland's Delphi 7 IDE by Bill Moore 05/2010
+
+unit FlatsUnit;
+
+//==============================================================================
+interface //====================================================================
+//==============================================================================
+
+uses
+  Windows, Messages, Classes, Graphics, Controls, Forms, Dialogs, StdCtrls,
+  SysUtils, ExtCtrls, Menus, EsEdCalc, EsEdPop, EsLabel, Buttons,
+  adpEdit, jpeg, ToolTipManager;
+
+type
+  // The status of our G-Code file
+  TFileStatus = (fsNotWritten, fsJustWritten, fsUnaltered, fsAltered, fsSaved, fsFileError);
+
+type
+  // Type of call to our FlatsDlg dialog
+  TDlgInfo = (diMachineInfo, diFileInfo, diCommentInfo, diWarningInfo, diStopInfo);
+
+type
+  TFlatsForm = class(TForm)
+    // Form background
+    Image1: TImage;
+    // Part Diameter visual controls
+    lblPartDiameter: TEsLabel;
+    edtPartDiameter: TadpEdit;
+    // Distance Across Flats visual controls
+    lblAcrossFlats: TEsLabel;
+    edtAcrossFlats: TadpEdit;
+    // Number Of Flats visual controls
+    lblNumberOfFlats: TEsLabel;
+    edtNumberOfFlats: TadpEdit;
+    // Tool Number visual controls
+    lblToolNumber: TEsLabel;
+    edtToolNumber: TadpEdit;
+    // Cutter Diameter visual controls
+    lblCutterDiameter: TEsLabel;
+    edtCutterDiameter: TadpEdit;
+    // X Position #1 visual controls
+    lblXPos1: TEsLabel;
+    edtXPos1: TEsNumberEdit;
+    // X Position #2 visual controls
+    lblXPos2: TEsLabel;
+    edtXPos2: TEsNumberEdit;
+    // Spindle Speed visual controls
+    lblSpindleSpeed: TEsLabel;
+    edtSpindleSpeed: TadpEdit;
+    // Number Of Flats visual controls
+    lblNumberOfEdges: TEsLabel;
+    edtNumberOfEdges: TadpEdit;
+    // Feed Per Edge visual controls
+    lblFeedPerEdge: TEsLabel;
+    edtFeedPerEdge: TadpEdit;
+    // Feed Rate visual controls
+    lblFeedRate: TEsLabel;
+    edtFeedRate: TadpEdit;
+    // Depth Of Cut visual controls
+    lblDepthOfCut: TEsLabel;
+    edtDepthOfCut: TadpEdit;
+    // Work Offset visual controls
+    lblWorkOffset: TEsLabel;
+    edtWorkOffset: TadpEdit;
+
+    // Hints about each edit box
+    memoHints: TMemo;
+    // Cutting specifications based on edit box values
+    memoSpecs: TMemo;
+
+    // Menu items displayed during File Edit
+    mnuMainMenu: TMainMenu;
+    mnuSave: TMenuItem;
+    mnuSearch: TMenuItem;
+    mnuExit: TMenuItem;
+
+    // The 2 buttons
+    btnExit: TBitBtn;
+    btnWriteFile: TBitBtn;
+
+    // Tool Tips
+    ToolTipManager1: TToolTipManager;
+    eslbl: TEsLabel;
+    eslbl1: TEsLabel;
+
+    // Class Methods associated with the form -
+    // Establish mouse-snap to default button in all dialogs
+    procedure OnActiveFormChange(Sender: TObject);
+
+    // These four procs are for ALL the TEdit KeyPresses
+    procedure IntEdtKeyPress(Sender: TObject; var Key: Char);
+    procedure FloatEdtKeyPress(Sender: TObject; var Key: Char);
+    procedure MathEdtKeyPress(Sender: TObject; var Key: Char);
+    procedure EdtBoxKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+
+    procedure edtPartDiameterEnter(Sender: TObject);
+    procedure edtPartDiameterExit(Sender: TObject);
+    // PartDiameterClick applies to ALL Tedit OnClick events.
+    // It selects the text for editing
+    procedure edtPartDiameterClick(Sender: TObject);
+    // PartDiameterChange applies to AcrossFlatsChange, CutterDiameterChange,
+    // XPos1Change, XPos2Change and DepthOfCutChange. It calls UpdateSpecs.
+    procedure edtPartDiameterChange(Sender: TObject);
+    //  PartDiameterContextPopup applies to ALL TEdit right-click events
+    procedure edtPartDiameterContextPopup(Sender: TObject; MousePos: TPoint;
+      var Handled: Boolean);
+
+    procedure edtAcrossFlatsEnter(Sender: TObject);
+    procedure edtAcrossFlatsExit(Sender: TObject);
+
+    procedure edtNumberOfFlatsEnter(Sender: TObject);
+    procedure edtNumberOfFlatsExit(Sender: TObject);
+
+    procedure edtXPos1Enter(Sender: TObject);
+    procedure edtXPos1Exit(Sender: TObject);
+
+    procedure edtXPos2Enter(Sender: TObject);
+    procedure edtXPos2Exit(Sender: TObject);
+
+    procedure edtToolNumberEnter(Sender: TObject);
+    procedure edtToolNumberExit(Sender: TObject);
+
+    procedure edtCutterDiameterEnter(Sender: TObject);
+    procedure edtCutterDiameterExit(Sender: TObject);
+
+    procedure edtSpindleSpeedEnter(Sender: TObject);
+    procedure edtSpindleSpeedExit(Sender: TObject);
+
+    procedure edtNumberOfEdgesEnter(Sender: TObject);
+    procedure edtNumberOfEdgesExit(Sender: TObject);
+
+    procedure edtFeedPerEdgeEnter(Sender: TObject);
+    procedure edtFeedPerEdgeExit(Sender: TObject);
+
+    procedure edtDepthOfCutEnter(Sender: TObject);
+    procedure edtDepthOfCutExit(Sender: TObject);
+
+    procedure edtWorkOffsetEnter(Sender: TObject);
+    procedure edtWorkOffsetExit(Sender: TObject);
+
+    procedure btnWriteFileEnter(Sender: TObject);
+    procedure btnWriteFileClick(Sender: TObject);
+
+    procedure btnExitEnter(Sender: TObject);
+    procedure btnExitClick(Sender: TObject);
+
+    // This is for Entering the TMemo Boxes
+    procedure memoHintsEnter(Sender: TObject);
+
+    // These are for the Disk Drive selection ComboBox in WriteFileClick
+    procedure cbDiskDriveEnter(Sender: TObject);
+    procedure cbDiskDriveExit(Sender: TObject);
+
+    // These are for the File Name TEdit in WriteFileClick
+    procedure edtFileNameEnter(Sender: TObject);
+    procedure edtFileNameExit(Sender: TObject);
+
+    // This is for the HotKeys Alt + S and Alt + U
+    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+
+    // Procedures for the TMemo Edit window
+    procedure FileEdit;
+    procedure mnuSaveClick(Sender: TObject);
+    procedure mnuExitClick(Sender: TObject);
+    procedure mnuSearchClick(Sender: TObject);
+    procedure ReplaceRoutine(Sender: TObject);
+    procedure MemoChange(Sender: TObject);
+
+    // Procedures for shutting down the program
+    procedure CloseDialog(FileStatus: TFileStatus);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+
+    // Custom message dialogs
+    function FlatsDlg(DlgInfo: TDlgInfo; const What: string = '';
+      const Why: string = ''): TModalResult;
+
+    procedure FormCreate(Sender: TObject);
+
+  private
+    // WMSysCommand processes system messages & handles our About... menu item
+    procedure WMSysCommand(var Msg: TWMSysCommand); message WM_SYSCOMMAND;
+
+  public
+    //  no public declarations
+
+  end; // of TFlatsForm definition
+
+var
+  FlatsForm: TFlatsForm; // Our only form.
+
+//==============================================================================
+implementation //===============================================================
+//==============================================================================
+
+{$R *.dfm} // form resource
+{$R DlgIcons.res} // icon resource
+
+uses
+  About, // my AboutBox
+  Math, // for the InRange function in function Valid
+  Parser, // for parsing math formulas in XPos1 & XPos2 edit boxes
+  Registry, // for saving info about LastPart
+  MyDriveCombo, // my TDriveComboBox
+  Borders; // my TBorder component
+
+//==============================================================================
+//=== GLOBAL VARIABLES =========================================================
+//==============================================================================
+
+type
+  // This Part Record will hold our numbers for the math during
+  // file writing and will be written to regestry key LastPart
+  Part = record
+    PartDiameter: Real;
+    AcrossFlats: Real;
+    NumberOfFlats: Byte;
+    XPos1: Real;
+    XPos2: Real;
+    ToolNumber: Byte;
+    CutterDiameter: Real;
+    RPM: Word;
+    NumberOfEdges: Byte;
+    FeedPerEdge: Real;
+    DepthOfCut: Real;
+    WorkOffset: Byte;
+    FilesWritten: Word;
+    LastUsed: TDateTime;
+    Machine: string[4];
+    ChamferTool: boolean;
+  end; // of Part Record
+
+const
+  // Set min/max allowed values for our TEdit Boxes.
+  // Set 0.00001 less for minimum values, 0.00001 more for max due to rounding
+  // Change these values as needed but keep it reasonable
+  MinPartDiameter = 0.99999;
+  MaxPartDiameter = 24.00001;
+  MinAcrossFlats = 0.74999;
+  MinCutterDiameter = 0.74999;
+  MaxCutterDiameter = 8.00001;
+  MinSpindleSpeed = 150;
+  MaxSpindleSpeed = 3500;
+  MinDepthOfCut = 0.01999;
+  MaxDepthOfCut = 0.20001;
+  MinFeedPerEdge = 0.0009;
+  MaxFeedPerEdge = 0.02001;
+  MinNumberOfEdges = 1;
+  MaxNumberOfEdges = 10;
+  MaxXPosition = 40.00001;
+
+  // Constants for my message dialogs
+  DlgWidth = 380; // Dialog Width
+  IconOffset = 15; // Icon Offset
+  IconFrameOffset = 4; // offset for the border around the icons
+
+  // Constant for my About system menu item
+  ID_ABOUT = WM_USER + 1; // System menu identifier for AboutBox
+
+var
+  ThisPart: Part; // ThisPart is a Part Record.
+
+  // Variables for the flats cutter during file writing
+  PartRadius, ToolRadius: Real; // For trigging out the Y positions.
+  YApproach, YMove: Real; // The Y positions themselves.
+  ZDepthThisPass, TotalZDepth: Real; // Gotta keep up with both.
+  LeftEdge, RightEdge: Real; // For comments and for the chamfer tool.
+  ProgFeedRate: Real; // To hold/print NumberOfEdges * FeedPerEdge * RPM
+
+  // Variables for chamfer tool during file writing
+  XShift, ZMove: Real; // For the shift during rotation.
+  SideOpposite, SideAdjacent: Real; // To trig out the rotation.
+  Angle: Real; // The rotation itself.
+  AngleMod: Real = 0.0; // Amount to modify angle for chamfering a radius.
+  RadiusToSwing: real = 0.0; // Radius to swing at the edges for chamfer tool.
+
+  // Variables for the Edit window if they choose to edit the G-Code
+  Memo: TMemo; // The Edit Window itself
+  FindText: string[9]; // for search and replace
+  ReplaceText: string[9]; // for search and replace
+
+  // Variables for the files we're gonna write
+  f: text; // ASCII G-Code file on  removable drive
+  DrvLtr: string[2]; // Allows changing drive to write to during WriteFileClick
+  DiskFileName: array[0..7] of char; // Allows changing the file name
+  FileComment: string; // Allows changing the file comment
+
+  // Misc. shit for program control
+  PassNumber: Integer; // PassNumber is for file comments.
+  ValResult: Integer; // ValResult is for numeric conversions.
+  Temp: string[8]; // Tempory variable for numeric conversions.
+  TempText: string; // For miscellaneous message building and file I/O.
+  Started: boolean = false; // Started = true if LastPart file was read.
+  pt: TPoint; // Mouse pointer position
+  LastActive: TWinControl; // Tracks which control you just left
+  btnYes, btnNo, btnOK, btnCancel: TButton; // used to change button properties
+
+  // Character set to determine if we need to do a calculation for them
+  CharSet: set of char = ['(',')','+','-','*','/']; // for the Math Parser
+
+//==============================================================================
+//=== START OF CODE ============================================================
+//==============================================================================
+//=== GENERAL FORM RELATED ROUTINES ============================================
+//==============================================================================
+// === FormCreate method =======================================================
+//==============================================================================
+
+// Append the system menu with our About menu item
+
+procedure TFlatsForm.FormCreate(Sender: TObject);
+var
+  hSysMenu: HMENU;
+begin
+  hSysMenu := GetSystemMenu(Handle, false);
+  AppendMenu(hSysMenu, MF_SEPARATOR, 0, nil);
+  AppendMenu(hSysMenu, MF_STRING, ID_ABOUT, PChar('&About...'));
+end;
+
+//==============================================================================
+//=== process Windows messages =================================================
+//==============================================================================
+
+// The message handler for the system menu
+
+procedure TFlatsForm.WMSysCommand(var Msg: TWMSysCommand);
+var
+  i: byte;
+begin
+  if Msg.CmdType = ID_ABOUT then
+    ShowAboutDialog('CNC G-Code Generator For Milling Flats On Tool Joints')
+  else
+    inherited;
+  for i := 0 to ComponentCount - 1 do
+    if Components[i] is TWinControl then
+      TWinControl(Components[i]).Invalidate;
+  refresh;
+end;
+
+//==============================================================================
+//=== OnActiveFormChange method ================================================
+//==============================================================================
+
+// Snap the mouse over the default button when changing to a modal dialog
+// Works only if the user's mouse settings are set to snap to the default button
+
+procedure TFlatsForm.OnActiveFormChange(Sender: TObject);
+var
+  af: TCustomForm;
+  cp: TPoint;
+
+  //============================================================================
+  //=== embedded function checks their mouse-snap setting ======================
+  function SnapMouseToDialogDefaultButton: boolean;
+  var
+    r: Bool;
+  begin
+    Result := SystemParametersInfo(SPI_GETSNAPTODEFBUTTON, 0, @r, 0) and r;
+  end; // of function SnapMouseToDialogDefaultButton ===========================
+  //============================================================================
+
+begin
+  af := Screen.ActiveCustomForm;
+  if (af = nil) or (af.ActiveControl = nil) then exit;
+  if (fsModal in af.FormState) and af.ActiveControl.InheritsFrom(TButton) and
+    SnapMouseToDialogDefaultButton then
+  begin
+    cp := af.ActiveControl.ClientOrigin;
+    Inc(cp.X, af.ActiveControl.ClientWidth div 2);
+    Inc(cp.Y, af.ActiveControl.ClientHeight div 2);
+    Mouse.CursorPos := cp;
+  end;
+end; // of procedure OnActiveFormChange
+
+//==============================================================================
+//=== procedure SetCapsLockKey =================================================
+//==============================================================================
+
+// Shift the state of CapsLock, NumLock or ScrollLock
+// I'm using this to turn on/off CapsLock and NumLock
+
+procedure SetCapsLockKey(vcode: Integer);
+var
+  KeyState: TKeyboardState;
+begin
+  GetKeyboardState(KeyState);
+  if (KeyState[vcode] = 0) then
+  begin
+    // simulate a "CAPS LOCK" key release
+    Keybd_Event(vcode, 1, KEYEVENTF_EXTENDEDKEY or 0, 0);
+    // simulate a "CAPS LOCK" key press
+    Keybd_Event(vcode, 1, KEYEVENTF_EXTENDEDKEY or KEYEVENTF_KEYUP, 0);
+  end else
+  begin
+    Keybd_Event(vcode, 0, KEYEVENTF_EXTENDEDKEY or 0, 0);
+    Keybd_Event(vcode, 0, KEYEVENTF_EXTENDEDKEY or KEYEVENTF_KEYUP, 0);
+  end;
+end; // of procedure SetCapsLockKey
+
+//==============================================================================
+//=== FormKeyDown Method =======================================================
+//==============================================================================
+
+// FlatsForm's KeyPreview property must be true.
+// Method shows number of files written on Alt + U
+// Allows specifying radius to swing and angle modification on Alt + M
+
+procedure TFlatsForm.FormKeyDown(Sender: TObject; var Key: word;
+  Shift: TShiftState);
+begin
+  if (ssAlt in Shift) then
+  begin
+    if (ord(Key) = 85) or (ord(Key) = 117) then
+      ShowMessage('Program has written ' + inttostr(ThisPart.FilesWritten) +
+      ' files. Last Used: ' + DateTimeToStr(ThisPart.LastUsed));
+    if (ord(Key) = 77) then
+    begin
+      repeat
+        Temp := inputbox('Angle Modification:', 'Enter amount to subtract from angle ' +
+          '(for Walter 7/64" R inserts start with 0.06):', '0.06');
+        val(Temp, AngleMod, ValResult);
+      until (ValResult = 0);
+      if (AngleMod = 0.0) then
+      begin
+        RadiusToSwing := 0.0;
+        exit;
+      end;
+      repeat
+        Temp := inputbox('Radius to swing with Chamfer Tool:', 'Enter radius to swing: ',
+          '0.1094');
+        val(Temp, RadiusToSwing, ValResult);
+      until (ValResult = 0);
+      if (RadiusToSwing = 0.0) then
+        AngleMod := 0.0;
+    end;
+  end;
+end; // of procedure FormKeyDown
+
+//==============================================================================
+//=== function GetComputerName =================================================
+//==============================================================================
+
+// function returns the name assigned to this computer
+
+function GetComputerName: string;
+var
+  buffer: array[0..MAX_COMPUTERNAME_LENGTH + 1] of Char;
+  Size: Cardinal;
+begin
+  Size := MAX_COMPUTERNAME_LENGTH + 1;
+  Windows.GetComputerName(@buffer, Size);
+  Result := StrPas(buffer);
+end;
+
+//==============================================================================
+//=== procedure ContextPopup ===================================================
+//==============================================================================
+
+// this disables the right-click pop-up in our TEdit boxes
+
+procedure TFlatsForm.edtPartDiameterContextPopup(Sender: TObject;
+  MousePos: TPoint; var Handled: Boolean);
+begin
+  Handled := true;
+end; // of procedure PartDiameterContextPopup
+
+//==============================================================================
+//=== ROUTINES TO SHUT DOWN THE APPLICATION ====================================
+//==============================================================================
+//=== procedure FormClose ======================================================
+//==============================================================================
+
+// this handles the Close button on the Title Bar
+
+procedure TFlatsForm.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  Action := caNone;
+  // if they're in the Edit Window call mnuExitClick
+  if (mnuSave.Visible) then
+    mnuExitClick(Sender)
+  else
+  // otherwise call my CloseDialog
+    CloseDialog(fsNotWritten);
+end; // of procedure FormClose
+
+//==============================================================================
+//=== procedure CloseDialog ====================================================
+//==============================================================================
+
+// This is where we come to shut down the application.
+// Call with the status of our G-Code file...
+//
+// fsNotWritten:  we never wrote it to disk
+// fsJustWritten: we wrote it to disk and they clicked 'Done'
+// fsUnaltered:   they clicked 'Edit' but never changed anything
+// fsAltered:     they clicked 'Edit', made changes, but chose not to save the changes
+// fsSaved:       they edited the file and saved their changes
+// fsFileError:   there was a problem saving the file to disk
+
+procedure TFlatsForm.CloseDialog(FileStatus: TFileStatus);
+var
+  // variables for the dialog
+  AMsgDialog: TForm; // for the Message Dialog
+  MyButtons: TMsgDlgButtons; // to assign Dialog buttons to include
+  MyText1 : TStaticText; // our Dialog's message
+  MyText2: TEsLabel; // reminder for them to Drive Safe
+  MyImage1: TImage; // left Info icon
+  MyImage2: TImage; // right Info Icon
+  bdrDialog: TBorder; // outline for the dialog
+  bdrMyText1: TBorder; // frame for MyText
+  bdrMyText2: TBorder; // frame for lblDriveSafe
+  bdrMyImage1: TBorder; // frame for MyImage1
+  bdrMyImage2: TBorder; // frame for MyImage2
+  MyBitmap: TBitmap; // to get the Info icon from the resource
+  Ans: TModalResult; // button clicked
+
+  //============================================================================
+  // procedure InhibitCancelButtons  removes the close button from the Title
+  // bar and prevents the Escape key from closing the dialog
+
+  procedure InhibitCancelButtons(const Dlg: TForm);
+  var
+    i: byte; // loops thru all components on form
+  begin
+    // Switch off cancel property on all buttons
+    for i := 0 to Pred(Dlg.ComponentCount) do
+      if Dlg.Components[i] is TButton then
+        (Dlg.Components[i] as TButton).Cancel := False;
+    // remove the close button from the title bar
+	  Dlg.BorderIcons := Dlg.BorderIcons - [biSystemMenu]
+  end; // procedure InhibitCancelButtons =======================================
+
+begin // procedure CloseDialog
+  // Make the menu items and buttons invisible
+  btnWriteFile.Enabled := false;
+  btnExit.Enabled := false;
+  btnWriteFile.Visible := false;
+  btnExit.Visible := false;
+  mnuSave.Visible := false;
+  mnuSearch.Visible := false;
+  mnuExit.Visible := false;
+  eslbl.Visible := true;
+  eslbl1.Visible := true;
+
+  // tell em what's up in the Hints area
+  memoHints.Height := 22;
+  case FileStatus of
+    fsJustWritten:
+      memoHints.Text := 'Click Done to exit, Edit to edit G-Code, New File to ' +
+                        'program another part';
+    fsFileError:
+      memoHints.Text := 'File was not saved to disk!';
+    else
+      memoHints.Text := 'Click Done to exit, New File to program another part';
+  end; // case
+
+  // set the Dialog's message based on FileStatus
+  case FileStatus of
+    fsNotWritten:
+      TempText := 'New file was not written to disk.';
+    fsJustWritten:
+      TempText := 'File ' + DiskFileName + ' has been saved to disk.';
+    fsUnaltered:
+      TempText := 'File ' + DiskFileName + ' is on Drive ' + DrvLtr;
+    fsAltered:
+      TempText := 'Changes to ' + DiskFileName + ' discarded.';
+    fsSaved:
+      TempText := 'Changes to ' + DiskFileName + ' saved.';
+    fsFileError:
+      TempText := 'Error saving ' + DiskFileName + ' to disk.';
+  end; // case
+
+  // establish buttons based on FileStatus
+  if (FileStatus = fsJustWritten) then
+    MyButtons := [mbYes, mbNo, mbCancel]
+  else
+    MyButtons := [mbYes, mbCancel];
+
+  // create the Dialog and associated components
+  AMsgDialog := CreateMessageDialog('', mtCustom, MyButtons);
+  bdrDialog := TBorder.Create(AMsgDialog);
+  MyText1 := TStaticText.Create(AMsgDialog);
+  MyText2 := TEsLabel.Create(AMsgDialog);
+  MyImage1 := TImage.Create(AMsgDialog);
+  MyImage2 := TImage.Create(AMsgDialog);
+  bdrMyText1 := TBorder.Create(AMsgDialog);
+  bdrMyText2 := TBorder.Create(AMsgDialog);
+  bdrMyImage1 := TBorder.Create(AMsgDialog);
+  bdrMyImage2 := TBorder.Create(AMsgDialog);
+  MyBitmap := TBitmap.Create;
+
+  with AMsgDialog do
+  try
+    BorderStyle := bsToolWindow;
+    Width := DlgWidth;
+    position := poOwnerFormCenter;
+    Font.Style := [fsBold];
+    Caption := ' INFO: ';
+
+    // set the Dialog's caption based on FileStatus
+    if (FileStatus = fsNotWritten) or (FileStatus = fsFileError) then
+      Caption := Caption + 'G-Code File was not saved to disk.'
+    else
+      Caption := Caption+'G-Code File '+DiskFileName+ ' is saved on drive '+DrvLtr;
+
+    // this TBevel outlines our dialog
+    with bdrDialog do
+    begin
+      Parent := AMsgDialog;
+      Align := alClient;
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvLowered;
+      BevelInner := bvRaised;
+    end;
+
+    // position our dialog message
+    with MyText1 do
+    begin
+      Parent := AMsgDialog;
+      Color := clBtnFace;
+      Top := bdrDialog.Top + 20;
+      Height := Canvas.TextHeight(TempText);
+      Left := (AMsgDialog.Width - Canvas.TextWidth(TempText)) div 2;
+      Caption := TempText;
+    end; // of with MyText do
+
+    // and put a frame around it
+    with bdrMyText1 do
+    begin
+      Parent := AMsgDialog;
+      Width := 240;
+      Left := (AMsgDialog.Width  div 2) - (Width div 2);
+      Top := MyText1.Top - 7;
+      Height := MyText1.Height + 12;
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvLowered;
+      BevelInner := bvLowered;
+    end; // of with Border2 do
+
+    // position and change captions of buttons
+    btnYes := TButton(FindComponent('Yes'));
+    btnYes.Top := bdrMyText1.Top + bdrMyText1.Height + 5;
+    btnYes.Caption := '&Done';
+    btnCancel := TButton(FindComponent('Cancel'));
+    btnCancel.Top := btnYes.Top;
+    btnCancel.Caption := '&New File';
+    if FileStatus = fsJustWritten then
+    begin
+      btnNo := TButton(FindComponent('No'));
+      btnNo.Top := btnYes.Top;
+      btnNo.Left := (AMsgDialog.Width div 2) - (btnNo.Width div 2);
+      btnNo.Caption := '&Edit';
+      btnYes.Left := (AMsgDialog.Width div 2) - (btnNo.Width div 2) - btnYes.Width - 6;
+      btnCancel.Left := (AMsgDialog.Width div 2) + (btnNo.Width div 2) + 6;
+    end else
+    begin
+      btnYes.Left := (AMsgDialog.Width div 2) - btnYes.Width  - 3;
+      btnCancel.Left := (AMsgDialog.Width div 2) + 3;
+    end;
+
+   // get our Info icon
+    if (FileStatus = fsNotWritten) or (FileStatus = fsFileError) then
+      MyBitmap.Handle := LoadBitmap(hInstance, 'ERRORICON')
+    else
+      MyBitmap.Handle := LoadBitmap(hInstance, 'SUCCESSICON');
+
+    // position the left icon
+    with MyImage1 do
+    begin
+      Parent := AMsgDialog;
+      Top := IconOffset;
+      Transparent := true;
+      Width := MyBitmap.Width;
+      Height := MyBitmap.Height;
+      Left := bdrMyText1.Left - IconOffset - Width;
+      Canvas.Draw(0,0,MyBitmap);
+    end; // of with MyImage1 do
+
+    // and put a frame around it
+    with bdrMyImage1 do
+    begin
+      Parent := AMsgDialog;
+      Width := MyImage1.Width + (IconFrameOffset * 2);
+      Left := MyImage1.Left - IconFrameOffset;
+      Top := MyImage1.Top - IconFrameOffset;
+      Height := MyImage1.Height + (IconFrameOffset * 2);
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvRaised;
+      BevelInner := bvRaised;
+    end; // of with Border4 do
+
+    // position the right icon
+    with MyImage2 do
+    begin
+      Parent := AMsgDialog;
+      Top := IconOffset;
+      Transparent := true;
+      Width := MyBitmap.Width;
+      Height := MyBitmap.Height;
+      Left := bdrMyText1.Left + bdrMyText1.Width + IconOffset;
+      Canvas.Draw(0,0,MyBitmap);
+    end; // of with MyImage2 do
+
+    // and put a frame around it
+    with bdrMyImage2 do
+    begin
+      Parent := AMsgDialog;
+      Width := MyImage2.Width + (IconFrameOffset * 2);
+      Left := MyImage2.Left - IconFrameOffset;
+      Top := MyImage2.Top - IconFrameOffset;
+      Height := MyImage2.Height + (IconFrameOffset * 2);
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvRaised;
+      BevelInner := bvRaised;
+    end; // of with Border5 do
+
+    //and put a frame around the DriveSafe label
+    with bdrMyText2 do
+    begin
+      Parent := AMsgDialog;
+      Top := btnYes.Top + btnYes.Height + 5;
+      Left := bdrMyImage1.Left;
+      Width := (bdrMyImage2.Left + bdrMyImage2.Width) - Left;
+      Height := 40;
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvLowered;
+      BevelInner := bvLowered;
+    end; // of with Border3 do
+
+    // position the DriveSafe label
+    with MyText2 do
+    begin
+      Parent := AMsgDialog;
+      Width := 280;
+      Left := (AMsgDialog.Width  div 2) - (Width div 2);
+      Top :=  btnYes.Top + btnYes.Height + 12;
+      Height := 27;
+      Alignment := taCenter;
+      Caption := 'Operate Machine Safely!';
+      Font.Charset := DEFAULT_CHARSET;
+      Font.Height := -20;
+      Font.Name := 'Arial';
+      Font.Color := clBlue;
+      Font.Style := [fsBold];
+      ParentFont := False;
+      Appearance := apSunken;
+    end; // of with MyText2 do
+
+    AMsgDialog.Height := bdrMyText2.Top + bdrMyText2.Height + 35;
+
+    InhibitCancelButtons(AMsgDialog);
+
+     // show the dialog and store their response in Ans
+    Ans := ShowModal;
+
+  finally
+
+    // clean up the dialog
+    MyBitmap.Free;
+    Free;
+
+  end; // of with AMsgDialog do
+
+  // check their response to the dialog
+  case Ans of
+    mrNo: // No was changed to Edit
+      begin
+        FileEdit;
+        exit;
+      end;
+    mrCancel:  // Cancel was changed to New File
+      begin
+        FlatsForm.Caption := '   CNC G-Code Generator For Milling Tool Joint Flats';
+        memoSpecs.Visible := true;
+        eslbl.Visible := false;
+        eslbl1.Visible := false;
+        btnWriteFile.Visible := true;
+        btnExit.Visible := true;
+        btnWriteFile.Enabled := true;
+        btnExit.Enabled := true;
+        edtPartDiameter.SetFocus;
+        edtPartDiameterEnter(FlatsForm);
+        refresh;
+        exit;
+       end;
+  else  // they clicked Done
+    begin
+      // Turn off the CapsLock key on if it's on
+      if (GetKeyState(VK_CAPITAL) = 1) then
+        SetCapsLockKey(VK_CAPITAL);
+      Application.Terminate;
+    end;
+  end; // of case Ans of
+
+end; // of procedure CloseDialog
+
+//==============================================================================
+//=== MISC. PROCS FOR SCREEN UPDATES AND WRITING THE G-CODE FILE ===============
+//==============================================================================
+//=== function Passes ==========================================================
+//==============================================================================
+
+// function Passes returns the number of passes the cut will take.
+// Strictly for screen-display comments (Specs TMemo Box)
+
+function Passes: Real;
+begin
+  with ThisPart do
+  begin
+    TotalZDepth := (PartDiameter - AcrossFlats) / 2;
+    if (DepthOfCut > 0) then
+      Passes := TotalZDepth / DepthOfCut
+    else
+      Passes := 0;
+  end; // of With ThisPart Do
+end; // of function Passes
+
+//==============================================================================
+//=== function ScanString ======================================================
+//==============================================================================
+
+// scans their input and adds leading zero's if necessary
+// and parses any algebraic expressions
+
+function ScanString(const SString: string): string;
+var
+  i: byte;
+  TempString: string;
+  Cypherin: boolean;
+  TempVar: real;
+begin
+  if SString <> '' then
+  begin
+    Cypherin := false;
+    TempString := '';
+    for i := 1 to length(SString) do
+    begin
+      if (SString[i] = '.') and not(SString[i - 1] in['0'..'9']) then
+        TempString := TempString + '0' + SString[i]
+      else
+        TempString := TempString + SString[i];
+      if SString[i] in CharSet then
+        Cypherin := true;
+    end; // of for i := 1 to length(SString) do
+    result := TempString;
+    if Cypherin then
+    begin
+      with TMathParser.Create(FlatsForm) do
+      try
+        try
+          StringToScript(TempString);
+          TempVar := ExecuteScript;
+        except
+          on E:Exception do
+            ShowMessage('Invalid X Position formula!');
+        end; // of try/except
+        result := floattostr(TempVar);
+      finally
+        free;
+      end; // of try/finally
+    end; // of if Cypherin
+  end; // of if SString <> '' then
+end; // of function ScanString
+
+//==============================================================================
+//=== procedure UpdateFeedRate =================================================
+//==============================================================================
+
+// procedure updates value in the TEdit Box named FeedRate
+// Call this if they change the SpindleSpeed, NumberOfEdges or FeedPerEdge
+
+procedure UpdateFeedRate;
+begin
+  with ThisPart do
+  begin
+    if (NumberOfEdges > 0) and (FeedPerEdge > 0) and (RPM > 0) then
+    begin
+      Str(RPM * (NumberOfEdges * FeedPerEdge): 2: 2, Temp);
+      FlatsForm.edtFeedRate.Text := Temp;
+      val(FlatsForm.edtFeedRate.Text, ProgFeedRate, ValResult);
+    end else
+      FlatsForm.edtFeedRate.Text := '';
+  end; // of with ThisPart do
+end; // of procedure UpdateFeedRate
+
+//==============================================================================
+//=== procedure FindEdges ======================================================
+//==============================================================================
+
+// FindEdges finds where the edges of the flats will be from X Zero.
+// It is used by Specs TMemo box and by the Chamfer Tool during WriteFile
+
+procedure FindEdges;
+begin
+  with ThisPart do
+  begin
+    ToolRadius := CutterDiameter / 2;
+    if (XPos2 = 0) then
+    // There's only one X Position
+    begin
+      LeftEdge := XPos1 - ToolRadius;
+      RightEdge := XPos1 + ToolRadius;
+    end else
+    // There's 2 X Positions.  Find the one on the left...
+    if (XPos1 < XPos2) then
+    // It's XPos1 on the left, so...
+    begin
+      LeftEdge := XPos1 - ToolRadius;
+      RightEdge := XPos2 + ToolRadius;
+    end else
+    // Otherwise XPos2 is on the left.
+    begin
+      LeftEdge := XPos2 - ToolRadius;
+      RightEdge := XPos1 + ToolRadius;
+    end;
+  end; // of with ThisPart Do
+end; // of procedure FindEdges
+
+//==============================================================================
+//=== procedure UpdateSpecs ====================================================
+//==============================================================================
+
+// procedure updates info in the TMemo object named Specs
+// Call this if PartDiameter, AcrossFlats, XPos1, XPos2 or DepthOfCut changes
+
+procedure UpdateSpecs;
+begin
+  FlatsForm.memoSpecs.Text := 'Machining Specifications For This Part:';
+  FlatsForm.memoSpecs.Font.Name := 'Systen';
+  PassNumber := 1;
+  with ThisPart do
+  begin
+    if ((XPos1 <> 0) and (XPos2 <> 0)) or ((XPos1 <> 0)
+      and (FlatsForm.edtXPos2.Text = '--none--')) then
+    begin
+      FindEdges;
+      Str(Abs(LeftEdge - RightEdge): 2: 4, Temp);
+      FlatsForm.memoSpecs.Lines.Add('Width of flat will be ' + Temp + ' Inches');
+      Str(LeftEdge: 2: 4, Temp);
+      FlatsForm.memoSpecs.Lines.Add('Left edge of flat will be ' +
+        Temp + ' inches from X Zero.');
+      Str(RightEdge: 2: 4, Temp);
+      FlatsForm.memoSpecs.Lines.Add('Right edge of flat will be ' +
+        Temp + ' inches from X Zero.');
+      PassNumber := PassNumber + 2;
+    end else
+    begin
+      FlatsForm.memoSpecs.Lines.Add('Edge Location Info is Unavailable');
+      inc(PassNumber);
+    end; // of if ((XPos1 <> 0)
+    if ((PartDiameter > 0) and (AcrossFlats > 0) and (DepthOfCut > 0)) then
+    begin
+      if (Frac(Passes) < 0.0001) or (Frac(Passes) > 0.9999) then
+      // All passes will be equal @ DepthOfCut.
+      begin
+        Str(Round(Passes), Temp);
+        TempText := 'Cut will take ' + Temp + ' equal passes at ';
+        Str(DepthOfCut: 0: 4, Temp);
+        TempText := TempText + Temp;
+      end else
+      // If not, tell 'em how many at full depth and depth of last pass.
+      begin
+        Str(Int(Passes): 1: 0, Temp);
+        TempText := 'Cut will take ' + Temp + ' passes at ';
+        Str(DepthOfCut: 0: 4, Temp);
+        TempText := TempText + Temp + ' and 1 pass at ';
+        Str(Frac(Passes) * DepthOfCut: 0: 4, Temp);
+        TempText := TempText + Temp;
+      end; // of If (Frac(Passes) < 0.0001)
+      FlatsForm.memoSpecs.Lines.Add(TempText);
+      inc(PassNumber);
+    end else // of if ((PartDiameter > 0) and (AcrossFlats > 0) and (DepthOfCut > 0))
+    begin
+      with FlatsForm do
+        memoSpecs.Lines.Add('Number of Passes @ Depth of Cut Info is Unavailable');
+      inc(PassNumber);
+    end;
+  end; // of with ThisPart do
+  FlatsForm.memoSpecs.Height := 20 * PassNumber;
+end; // of procedure UpdateSpecs
+
+//==============================================================================
+//=== function IsDrive =========================================================
+//==============================================================================
+
+// See if there's a removable drive available
+
+function IsDrive: boolean;
+var
+  Drv: char; // for loop control finding removable drives
+begin
+  Result := false;
+  for Drv := 'A' to 'Z' do
+  begin
+    if (GetDriveType(PChar(Drv + ':\')) = Drive_Removable) and (DiskInDrive(Drv)) then
+    begin
+      Result := true;
+      break;
+    end;
+  end;
+end; // IsDrive
+
+//==============================================================================
+//=== HintsEnter Method ========================================================
+//==============================================================================
+
+// This method is in case they enter one of the TMemo Boxes
+// It's called for both the Hints and Specs OnEnter Methods
+
+procedure TFlatsForm.memoHintsEnter(Sender: TObject);
+begin
+  if LastActive = btnExit then
+    edtPartDiameter.SetFocus
+  else
+    LastActive.SetFocus;
+end; // of HintsEnter Method
+
+//==============================================================================
+//=== RecDOC Method ============================================================
+//==============================================================================
+
+// procedure RecDOC recommends a Depth Of Cut in the TMemo object named Specs
+// Call this if PartDiameter and AcrossFlats are greater than Zero
+
+procedure RecDOC(Specs: TMemo);
+var
+  EndDepth: Real; // Check stop. Check between DOC and DOC + .025
+begin
+  Specs.Text := 'Depth Of Cut Recommendation for passes of equal depth:';
+  PassNumber := 1;
+  with ThisPart do
+  begin
+    DepthOfCut := 0.0499;
+    if (Passes > 50.0) then
+      DepthOfCut := (TotalZDepth / 50) - 0.0001;
+    EndDepth := DepthOfCut + 0.0251;
+    while (DepthOfCut < EndDepth) and (DepthOfCut < 0.2000) and (PassNumber < 4) do
+    begin
+      DepthOfCut := DepthOfCut + 0.0001;
+      if (Frac(Passes) < 0.0001) or (Frac(Passes) > 0.9999) then
+      begin
+        inc(PassNumber);
+        Str(PassNumber - 1, Temp);
+        TempText := '  Recommendation #' + Temp + ':  ';
+        Str(DepthOfCut: 0: 4, Temp);
+        Temp := Copy(Temp, 2, 5);
+        TempText := TempText + Temp;
+        Str(Round(Passes), Temp);
+        TempText := TempText + ' for ' + Temp + ' equal passes. ';
+        Specs.Lines.Add(TempText);
+      end; // of If Frac(Passes)
+    end; // of While (DepthOfCut < EndDepth
+    if (PassNumber = 1) then
+    begin
+      Specs.Text := 'There are no equal-depth passes between .0500 and' +
+        ' .0750 Depth Of Cut';
+      DepthOfCut := 0.05;
+      Str(DepthOfCut: 0: 4, Temp);
+      TempText := 'For reference, a ' + Temp + ' Depth Of Cut ';
+      Str(Int(Passes): 1: 0, Temp);
+      TempText := TempText + 'would take ' + Temp + ' passes at ';
+      Str(DepthOfCut: 0: 4, Temp);
+      TempText := TempText + Temp + ' and 1 pass at ';
+      Str(Frac(Passes) * DepthOfCut: 0: 4, Temp);
+      TempText := TempText + Temp;
+      Specs.Lines.Add(TempText);
+      Specs.Lines.Add('Enter any Depth Of Cut between .0200 and .2000');
+      PassNumber := 3;
+    end; // of if (Passnumber = 1)
+  end; // of With ThisPart Do
+  Specs.Height := 19 * PassNumber;
+end; // of procedure RecDOC
+
+//==============================================================================
+//=== The following 2 methods apply to components (cbDiskDrive and edtFileName)
+//=== that I dynamically create and subsequently free in function FlatsDlg
+//==============================================================================
+//=== cbDiskDrive ComboBox Methods =============================================
+//==============================================================================
+
+procedure TFlatsForm.cbDiskDriveEnter(Sender: TObject);
+begin
+  memoHints.Text := 'Select the Removable Drive to write the G-Code File to.';
+end;
+
+procedure TFlatsForm.cbDiskDriveExit(Sender: TObject);
+begin
+  memoHints.Text := 'Select Chamfer Tool choice, Disk Drive, and re-name ' +
+                      'file if desired.';
+end;
+
+//==============================================================================
+//=== edtFleName TEdit Methods =================================================
+//==============================================================================
+
+procedure TFlatsForm.edtFileNameEnter(Sender: TObject);
+begin
+  memoHints.Text := 'Enter up to 5 digits for File Name. The letter ''O'' is ' +
+                    'automatically added';
+end;
+
+procedure TFlatsForm.edtFileNameExit(Sender: TObject);
+begin
+  memoHints.Text := 'Select Chamfer Tool choice, Disk Drive, and re-name ' +
+                    'file if desired.';
+  TEdit(Sender).OnClick := edtPartDiameterClick;
+end;
+
+//==============================================================================
+//=== function FlatsDlg  =======================================================
+//==============================================================================
+
+// function FlatsDlg displays different dialogs.
+// * Call with DlgInfo = diMachineInfo to display a dialog to select VF-3 or VF-6.
+// * Call with DlgInfo = diFileInfo to display a dialog with a combo-box to get the
+//   drive letter to write the file to and a TEdit to get the file name.
+// * Call with DlgInfo = diCommentInfo to display a TEdit to allow them to change the comment.
+// * Call with DlgInfo = diWarningInfo to display a Warning dialog.  String 'What' is
+//   displayed above the buttons, string 'Why' is displayed below the buttons.
+// * Call with DlgInfo = diStopInfo to display a Stop dialog.  String 'What' is
+//   displayed above the buttons.  Call with string 'Why' set to empty string ('').
+//   It is ignored and the string 'Correct This Problem To Continue' is displayed.
+
+function TFlatsForm.FlatsDlg(DlgInfo: TDlgInfo; const What: string = '';
+  const Why: string = ''): TModalResult;
+var
+  // Variables for the Dialog
+  AMsgDialog: TForm; // Form for the Dialog
+  MyButtons: TMsgDlgButtons; // to assign Dialog buttons to include
+  MyText1: TStaticText; // the Dialog text to display
+  MyText2: TEsLabel;  // displays the 'Why' argument if applicable
+  MyBitmap: TBitmap; // for my Icon in the resource file
+  MyImage1: TImage; // my icon on the dialog
+  MyImage2: TImage; // my icon on the dialog
+  bdrDialog: TBorder; // outlines our dialog
+  bdrMyText1: TBorder; // frame around MyText1
+  bdrMyText2: TBorder; // frame around the combo-box and TEdit
+  bdrMyImage1: TBorder; // frame around the left icon
+  bdrMyImage2: TBorder; // frame around the right icon
+  lblDiskDrive: TLabel; // label for the DiskDrive Combo-Box
+  cbDiskDrive: TMyDriveComboBox; // Combo-Box for the DiskDrive
+  lblFileName: TLabel; // label for the FileName TEdit
+  edtFileName: TadpEdit; // TEdit Box to enter the FileName
+
+  //============================================================================
+  // procedure InhibitCancelButtons  removes the close button from the Title
+  // bar and prevents the Escape key from closing the dialog
+
+  procedure InhibitCancelButtons(const Dlg: TForm);
+  var
+    i: byte; // loops thru all components on form
+  begin
+    // Switch off cancel property on all buttons
+    for i := 0 to Pred(Dlg.ComponentCount) do
+      if Dlg.Components[i] is TButton then
+        (Dlg.Components[i] as TButton).Cancel := False;
+    // remove the close button from the title bar
+	  Dlg.BorderIcons := Dlg.BorderIcons - [biSystemMenu]
+  end; // procedure InhibitCancelButtons =======================================
+
+begin // function FlatsDlg
+  // set the buttons to use and the Hints TMemo based on DlgInfo
+  case DlgInfo of
+    diMachineInfo:
+      begin
+        MyButtons := mbYesNoCancel;
+        memoHints.Height := 22;
+        memoHints.Text := 'Select Machine To Generate G-Code For';
+      end;
+    diFileInfo:
+      begin
+        memoHints.Height := 22;
+        if ((ThisPart.PartDiameter - ThisPart.AcrossFlats) / 2) < 0.150 then
+        begin
+          MyButtons := mbOKCancel;
+          memoHints.Text := 'Chamfer Tool Not Available. Select Disk Drive, and re-name ' +
+                            'file if desired.';
+        end else
+        begin
+          MyButtons := mbYesNoCancel;
+          memoHints.Text := 'Select Chamfer Tool choice, Disk Drive, and re-name ' +
+                          'file if desired.';
+        end;
+      end;
+    diCommentInfo:
+      begin
+        memoHints.Height := 22;
+        MyButtons := [mbOK];
+        memoHints.Text := 'This is the comment displayed when listing programs ' +
+                          'on the control';
+      end;
+    diWarningInfo:
+      begin
+        MyButtons := [mbYes, mbCancel];
+        MemoHints.Color := clYellow;
+      end;
+    diStopInfo:
+      begin
+        MyButtons := [mbOK];
+        memoHints.Height := 22;
+        memoHints.Color := clRed;
+        memoHints.Font.Color := clWhite;
+      end;
+  end;
+
+  // create the dialog and associated components
+  MyBitmap := TBitmap.Create;
+  AMsgDialog := CreateMessageDialog('', mtCustom, MyButtons);
+  bdrDialog := TBorder.Create(AMsgDialog);
+  MyText1 := TStaticText.Create(AMsgDialog);
+
+  case DlgInfo of
+    diFileInfo:
+      // we'll need a TComboBox for the drive and a TEdit for the file name
+      begin
+        lblDiskDrive := TLabel.Create(AMsgDialog);
+        cbDiskDrive := TMyDriveComboBox.Create(AMsgDialog);
+        lblFileName := TLabel.Create(AMsgDialog);
+        edtFileName := TadpEdit.Create(AMsgDialog)
+      end;
+    diCommentInfo:
+      // we'll need a TEdit for the comment
+      edtFileName := TadpEdit.Create(AMsgDialog)
+  else
+    // we just need something to contain the "Why" parameter
+    MyText2 := TEsLabel.Create(AMsgDialog);
+  end; // case
+
+  // TImages to contain our custom icon resources
+  MyImage1 := TImage.Create(AMsgDialog);
+  MyImage2 := TImage.Create(AMsgDialog);
+
+  // lets create some cute borders to put around this shit
+  bdrMyText1 := TBorder.Create(AMsgDialog);
+  bdrMyText2 := TBorder.Create(AMsgDialog);
+  bdrMyImage1 := TBorder.Create(AMsgDialog);
+  bdrMyImage2 := TBorder.Create(AMsgDialog);
+
+  // set properties of everything
+  with AMsgDialog do
+  try
+    BorderStyle := bsToolWindow;
+    Width := DlgWidth;
+    position := poOwnerFormCenter;
+    Font.Height := -12;
+    Font.Name := 'Arial';
+    Font.Style := [fsBold];
+
+    // set the Caption
+    case DlgInfo of
+      diMachineInfo: Caption := ' Select Machine:';
+      diFileInfo: Caption := ' ' + ThisPart.Machine + ' G-Code File Name & Information';
+      diCommentInfo: Caption := ' Main File Comment';
+      diWarningInfo: Caption := ' Wait! Are You Sure You Want To Do That?';
+      diStopInfo: Caption := ' Stop! You Can''t Do That Because...';
+    end; // case
+
+    // outline the dialog
+    with bdrDialog do
+    begin
+      Parent := AMsgDialog;
+      Align := alClient;
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvLowered;
+      BevelInner := bvRaised;
+    end; // of with bdrDialog do
+
+    // Set properties for the dialog messsage
+    with MyText1 do
+    begin
+      case DlgInfo of
+        diMachineInfo: TempText := 'Which Machine Is This G-Code For?';
+        diFileInfo: if ((ThisPart.PartDiameter - ThisPart.AcrossFlats) / 2) < 0.150 then
+                      TempText := 'Select Drive And Name File'
+                    else
+                      TempText := 'Include Chamfer Tool?';
+        diCommentInfo: TempText := 'Change Main File Comment?';
+        diWarningInfo, diStopInfo: TempText := What;
+      end; // case
+      Parent := AMsgDialog;
+      Color := clBtnFace;
+      Top := bdrDialog.Top + 20;
+      Height := Canvas.TextHeight(TempText)+ 10;
+      Left := (AMsgDialog.Width - Canvas.TextWidth(TempText)) div 2;
+      Caption := TempText;
+    end; // of with MyText1 do
+
+    // and put a frame around it
+    with bdrMyText1 do
+    begin
+      Parent := AMsgDialog;
+      Width := 240;
+      Left := (AMsgDialog.Width  div 2) - (Width div 2);
+      Top := MyText1.Top - 7;
+      Height := MyText1.Height + 12;
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvLowered;
+      BevelInner := bvLowered;
+    end; // of with Border1 do
+
+    // position the buttons
+    case DlgInfo of
+      diMachineInfo:
+        begin
+          btnNo := TButton(FindComponent('No'));
+          btnNo.Left := (AMsgDialog.Width div 2) - (btnNo.Width div 2);
+          btnNo.Top := bdrMyText1.Top + bdrMyText1.Height + 5;
+          btnNo.Caption := 'VF-&6';
+          btnYes := TButton(FindComponent('Yes'));
+          btnYes.Left := (AMsgDialog.Width div 2) - (btnNo.Width div 2) - btnYes.Width - 6;
+          btnYes.Top := btnNo.Top;
+          btnYes.Caption := 'VF-&3';
+          btnCancel := TButton(FindComponent('Cancel'));
+          btnCancel.Left := (AMsgDialog.Width div 2) + (btnNo.Width div 2) + 6;
+          btnCancel.Top := btnNo.Top;
+        end;
+      diFileInfo:
+        begin
+          if ((ThisPart.PartDiameter - ThisPart.AcrossFlats) / 2) < 0.150 then
+          begin
+            btnOK := TButton(FindComponent('OK'));
+            btnOK.Left := (AMsgDialog.Width div 2) - (btnOK.Width) - 3;
+            btnOK.Top := bdrMyText1.Top + bdrMyText1.Height + 5;
+            btnCancel := TButton(FindComponent('Cancel'));
+            btnCancel.Left := (AMsgDialog.Width div 2) + 3;
+            btnCancel.Top := btnOK.Top;
+          end else
+          begin
+            btnNo := TButton(FindComponent('No'));
+            btnNo.Left := (AMsgDialog.Width div 2) - (btnNo.Width div 2);
+            btnNo.Top := bdrMyText1.Top + bdrMyText1.Height + 5;
+            btnYes := TButton(FindComponent('Yes'));
+            btnYes.Left := (AMsgDialog.Width div 2) - (btnNo.Width div 2) - btnYes.Width - 6;
+            btnYes.Top := btnNo.Top;
+            btnCancel := TButton(FindComponent('Cancel'));
+            btnCancel.Left := (AMsgDialog.Width div 2) + (btnNo.Width div 2) + 6;
+            btnCancel.Top := btnNo.Top;
+          end;
+        end;
+      diWarningInfo:
+        begin
+          btnYes := TButton(FindComponent('Yes'));
+          btnYes.Left := (AMsgDialog.Width div 2) - btnYes.Width - 3;
+          btnYes.Top := bdrMyText1.Top + bdrMyText1.Height + 5;
+          btnCancel := TButton(FindComponent('Cancel'));
+          btnCancel.Left := (AMsgDialog.Width div 2) + 3;
+          btnCancel.Top := btnYes.Top;
+        end;
+      diCommentInfo, diStopInfo:
+        begin
+          btnOK := TButton(FindComponent('OK'));
+          btnOK.Left := (AMsgDialog.Width div 2) - (btnOK.Width div 2);
+          btnOK.Top := bdrMyText1.Top + bdrMyText1.Height + 5;
+        end;
+    end; // case
+
+    // load the appropriate Icon bitmap
+    case DlgInfo of
+      diWarningInfo: MyBitmap.Handle := LoadBitmap(hInstance, 'EXCLAMATIONICON');
+      diStopInfo: MyBitmap.Handle := LoadBitmap(hInstance, 'STOPICON')
+    else
+      MyBitmap.Handle := LoadBitmap(hInstance, 'QUESTIONICON');
+    end; // case/else
+
+    // put one on the left side of the dialog
+    with MyImage1 do
+    begin
+      Parent := AMsgDialog;
+      Top := IconOffset;
+      Transparent := true;
+      Width := MyBitmap.Width;
+      Height := MyBitmap.Height;
+      Left := bdrMyText1.Left - IconOffset - Width;
+      Canvas.Draw(0,0,MyBitmap);
+    end; // of with MyImage1 do
+
+    // and put a frame around it
+    with bdrMyImage1 do
+    begin
+      Parent := AMsgDialog;
+      Width := MyImage1.Width + (IconFrameOffset * 2);
+      Left := MyImage1.Left - IconFrameOffset;
+      Top := MyImage1.Top - IconFrameOffset;
+      Height := MyImage1.Height + (IconFrameOffset * 2);
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvRaised;
+      BevelInner := bvRaised;
+    end; // of with Border3 do
+
+    // put one on the right side of the dialog
+    with MyImage2 do
+    begin
+      Parent := AMsgDialog;
+      Top := IconOffset;
+      Transparent := true;
+      Width := MyBitmap.Width;
+      Height := MyBitmap.Height;
+      Left := bdrMyText1.Left + bdrMyText1.Width + IconOffset;
+      MyImage2.Canvas.Draw(0,0,MyBitmap);
+    end; // of with MyImage2 do
+
+    // and put a frame around it
+    with bdrMyImage2 do
+    begin
+      Parent := AMsgDialog;
+      Width := MyImage2.Width + (IconFrameOffset * 2);
+      Left := MyImage2.Left - IconFrameOffset;
+      Top := MyImage2.Top - IconFrameOffset;
+      Height := MyImage2.Height + (IconFrameOffset * 2);
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvRaised;
+      BevelInner := bvRaised;
+    end; // of with Border4 do
+
+    // this frame goes around the Combo-box and/or TEdit, or the 'Why' argument
+    with bdrMyText2 do
+    begin
+      Parent := AMsgDialog;
+      Left := bdrMyImage1.Left;
+      Width := (bdrMyImage2.Left + bdrMyImage2.Width) - Left;
+      case DlgInfo of
+        diMachineInfo, diFileInfo, diWarningInfo: Top := btnCancel.Top + btnCancel.Height + 5
+      else
+        Top := btnOK.Top + btnOK.Height + 5;
+      end;
+      Height := 40;
+      BorderWidth := 1;
+      BevelCtl3D := true;
+      BevelOuter := bvLowered;
+      BevelInner := bvLowered;
+    end; // of with Border2 do
+
+    // if we're getting the Drive and FileName create the components
+    if (DlgInfo = diFileInfo) then
+    begin
+      // Set properties for label DiskDrive
+      with lblDiskDrive do
+      begin
+        Parent := AMsgDialog;
+        Top := btnCancel.Top + btnCancel.Height + 17;
+        Left := 80;
+        Font.Charset := ANSI_CHARSET;
+        Font.Color := clWindowText;
+        Font.Height := -12;
+        Font.Name := 'Arial';
+        Font.Style := [fsBold];
+        Caption := 'Drive:';
+      end; // of with lblDiskDrive do
+      // Set properties for ComboBox cbDiskDrive
+      with cbDiskDrive do
+      begin
+        Parent := AMsgDialog;
+        OnEnter := cbDiskDriveEnter;
+        OnExit := cbDiskDriveExit;
+        Top := btnCancel.Top + btnCancel.Height + 14;
+        Left := 115;
+        Width := 60;
+        Font.Charset := ANSI_CHARSET;
+        Font.Color := clWindowText;
+        Font.Height := -12;
+        Font.Name := 'Arial';
+        Font.Style := [fsBold];
+        Options := [doNoFixed, doNoCDROM, doNoNetwork, doNoRAM, doNoFree,
+          doNoTape, doMediaRequired];
+        TextCase := tcUpperCase;
+      end; // of with cbDiskDrive do
+      // Set properties for label FileName
+      with lblFileName do
+      begin
+        Parent := AMsgDialog;
+        Top := lblDiskDrive.Top;
+        Left := 186;
+        Font.Charset := ANSI_CHARSET;
+        Font.Color := clWindowText;
+        Font.Height := -12;
+        Font.Name := 'Arial';
+        Font.Style := [fsBold];
+        Caption := 'Filename: O';
+      end; // of with lblFileName do
+    end; // of (if DlgInfo = NameInfo)
+
+    // if we're using the 'Why'argument create something to hold it
+    if (DlgInfo = diWarningInfo) or (DlgInfo = diStopInfo) or (DlgInfo = diMachineInfo) then
+    begin
+      // Set properties for the 2nd argument text (Why)
+      with MyText2 do
+      begin
+        Parent := AMsgDialog;
+        if (DlgInfo = diWarningInfo) or (DlgInfo = diMachineInfo) then
+        begin
+          Caption := Why;
+          Font.Height := -14;
+          Font.Color := clGreen;
+          Top := btnYes.Top + btnYes.Height + 15;
+        end else
+        begin
+          Caption := ' Correct This Problem To Continue! ';
+          Font.Height := -16;
+          Font.Color := clRed;
+          Top := btnOK.Top + btnOK.Height + 15;
+        end; // of if (DlgInfo = WarningInfo)
+        Width := 290;
+        Left := (DlgWidth div 2) - (Width div 2);
+        Alignment := taCenter;
+        Font.Charset := DEFAULT_CHARSET;
+        Font.Name := 'Arial';
+        Font.Style := [fsBold];
+        ParentFont := False;
+        Appearance := apSunken;
+        Color := clBtnFace;
+      end; // of with MyText2 do
+    end else
+    // must be FileInfo or CommentInfo so we need a TEdit
+    begin
+      // Set properties for the TEdit
+      with edtFileName do
+      begin
+        Parent := AMsgDialog;
+        Font.Charset := ANSI_CHARSET;
+        Font.Color := clWindowText;
+        Font.Height := -12;
+        Font.Name := 'Arial';
+        Font.Style := [fsBold];
+        Alignment := taCenter;
+        OnClick := edtPartDiameterClick;
+        if (DlgInfo = diFileInfo) then
+        // this TEdit is for the file name...
+        begin
+          Top := cbDiskDrive.Top;
+          Left := 255;
+          Width := 45;
+          MaxLength := 5;
+          // If they havn't already renamed the file then default to O00007
+          if DiskFileName[0] = 'O' then
+            Text := Copy(DiskFileName, 2, 5)
+          else
+            Text := '00007';
+          OnEnter := edtFileNameEnter;
+          OnExit := edtFileNameExit;
+          OnKeyPress := IntEdtKeyPress;
+        end else
+        // otherwise it's for the file comment...
+        begin
+          Top := bdrMyText2.Top + 8;
+          Left := bdrMyText2.Left + 10;
+          Width := bdrMyText2.Width - 20;
+          Text := edtPartDiameter.Text + ' O.D.  x  ' + edtAcrossFlats.Text + ' Flats';
+        end;
+      end; // of with FileName do
+    end; // of if (DlgInfo = WarningInfo) or (DlgInfo = StopInfo)
+
+    AMsgDialog.Height := bdrMyText2.Top + bdrMyText2.Height + 35;
+
+    // Lets beep at 'em on error or warning
+    case DlgInfo of
+      diStopInfo:
+        MessageBeep(MB_ICONHAND);
+      diWarningInfo:
+        MessageBeep(MB_ICONEXCLAMATION);
+    end; // case
+
+    // Set default Machine button based on last part programmed
+    if DlgInfo = diMachineInfo then
+    begin
+      if ThisPart.Machine = 'VF-6' then
+        ActiveControl := btnNo
+      else
+        ActiveControl := btnYes;
+    end; // if DlgInfo = diMachineInfo
+
+    // Set default Chamfer Tool choice based on last part programmed
+    if (DlgInfo = diFileInfo) then
+    begin
+      if (((ThisPart.PartDiameter - ThisPart.AcrossFlats) / 2) > 0.1499) then
+      begin
+        if Thispart.ChamferTool then
+        begin
+          ActiveControl := btnYes;
+          btnYes.Default := true;
+          btnNo.Default := false;
+        end else
+        begin
+          ActiveControl := btnNo;
+          btnNo.Default := true;
+          btnYes.Default := false;
+        end; // if Thispart.ChamferTool
+      end; // if (((ThisPart.PartDiameter - ThisPart.AcrossFlats) / 2) > 0.1499)
+    end; // if (DlgInfo = diFileInfo)
+
+    // if they're trying to exit the TMemo without saving changes
+    // make the Cancel button Active and Default
+    if (DlgInfo = diWarningInfo) and (What = 'Exit without saving changes?') then
+    begin
+      ActiveControl := btnCancel;
+      btnCancel.Default := true;
+      btnYes.Default := false;
+    end;
+
+    // remove the Close button and inhibit the Escape key
+    InhibitCancelButtons(AMsgDialog);
+
+    // display the dialog
+    FlatsDlg := ShowModal;
+
+    // grab what we need before releasing the dialog
+    if (DlgInfo = diFileInfo) then
+    begin
+      // Grab the Drive Letter
+      DrvLtr := cbDiskDrive.Text + ':';
+      // Grab the File Name...
+      // if they left it blank then default to O00007
+      if (length(edtFileName.Text) = 0) then
+        edtFileName.Text := '00007';
+      // Pad the filename with leading zero's
+      while (length(edtFileName.Text) < 5) do
+        edtFileName.Text := '0' + edtFileName.Text;
+      // Add the letter "O" for the Haas
+      edtFileName.Text := 'O' + edtFileName.Text;
+      // copy the ANSI string to null-terminated DiskFileName
+      StrPCopy(DiskFileName, edtFileName.Text);
+    end; // of if (DlgInfo = NameInfo)
+
+    if (DlgInfo = diCommentInfo) then
+      FileComment := edtFileName.Text;
+
+  finally
+
+    // Clean up
+    MyBitmap.Free;
+    Free;
+
+  end; // of with AMsgDialog do
+
+  // set memoHints back to black on white
+  memoHints.Color := clWhite;
+  memoHints.Font.Color := clBlack;
+
+  // refresh the form
+  refresh;
+
+end; // of function FlatsDlg
+
+//==============================================================================
+//=== ROUTINES FOR READING/WRITING LASTPART TO REGISTRY ========================
+//==============================================================================
+//=== procedure SavePart =======================================================
+//==============================================================================
+
+// procedure SavePart saves the part record in the Windows registry
+
+procedure SavePart;
+begin
+  with TRegistry.Create do
+  try
+    RootKey := HKEY_CURRENT_USER;
+    if OpenKey('LastPart', True) then
+    begin
+      with ThisPart do
+      begin
+        WriteBinaryData('Part Diameter', PartDiameter, SizeOf(PartDiameter)) ;
+        WriteBinaryData('AcrossFlats', AcrossFlats, SizeOf(AcrossFlats));
+        WriteBinaryData('NumberOfFlats', NumberOfFlats, SizeOf(NumberOfFlats));
+        WriteBinaryData('XPos1', XPos1, SizeOf(XPos1));
+        WriteBinaryData('XPos2', XPos2, SizeOf(XPos2));
+        WriteBinaryData('ToolNumber', ToolNumber, SizeOf(ToolNumber));
+        WriteBinaryData('CutterDiameter', CutterDiameter, SizeOf(CutterDiameter));
+        WriteBinaryData('RPM', RPM, SizeOf(RPM));
+        WriteBinaryData('NumberOfEdges', NumberOfEdges, SizeOf(NumberOfEdges));
+        WriteBinaryData('FeedPerEdge', FeedPerEdge, SizeOf(FeedPerEdge));
+        WriteBinaryData('DepthOfCut', DepthOfCut, SizeOf(DepthOfCut));
+        WriteBinaryData('WorkOffset', WorkOffset, SizeOf(WorkOffset));
+        WriteBinaryData('FilesWritten', FilesWritten, SizeOf(FilesWritten));
+        WriteDateTime('LastUsed', LastUsed);
+        WriteString('Mill', Machine);
+        WriteBool('ChamferTool', ChamferTool);
+      end; // of with ThisPart do
+      CloseKey;
+    end; // of if OpenKey('LastPart', True)
+  finally
+    Free;
+  end; // of try/finally
+end; // of procedure SavePart
+
+//==============================================================================
+//=== function ReadPart ========================================================
+//==============================================================================
+
+// and function ReadPart reads the part record from the registry.
+// returns true if successful, false otherwise
+
+function ReadPart: boolean;
+begin
+  Result := true;
+  with TRegistry.Create do
+  try
+    RootKey := HKEY_CURRENT_USER;
+    if OpenKey('LastPart', False) then
+    begin
+      try
+        with ThisPart do
+        begin
+          ReadBinaryData('Part Diameter', PartDiameter, SizeOf(PartDiameter)) ;
+          ReadBinaryData('AcrossFlats', AcrossFlats, SizeOf(AcrossFlats));
+          ReadBinaryData('NumberOfFlats', NumberOfFlats, SizeOf(NumberOfFlats));
+          ReadBinaryData('XPos1', XPos1, SizeOf(XPos1));
+          ReadBinaryData('XPos2', XPos2, SizeOf(XPos2));
+          ReadBinaryData('ToolNumber', ToolNumber, SizeOf(ToolNumber));
+          ReadBinaryData('CutterDiameter', CutterDiameter, SizeOf(CutterDiameter));
+          ReadBinaryData('RPM', RPM, SizeOf(RPM));
+          ReadBinaryData('NumberOfEdges', NumberOfEdges, SizeOf(NumberOfEdges));
+          ReadBinaryData('FeedPerEdge', FeedPerEdge, SizeOf(FeedPerEdge));
+          ReadBinaryData('DepthOfCut', DepthOfCut, SizeOf(DepthOfCut));
+          ReadBinaryData('WorkOffset', WorkOffset, SizeOf(WorkOffset));
+          ReadBinaryData('FilesWritten', FilesWritten, SizeOf(FilesWritten));
+          LastUsed := ReadDateTime('LastUsed');
+          Machine := ReadString('Mill');
+          ChamferTool := ReadBool('ChamferTool');
+        end; // of with ThisPart do
+      except
+        on E:Exception do
+          Result := false;
+      end; // of try/except
+      CloseKey;
+    end else // of if OpenKey('LastPart', False)
+      Result := false;
+  finally
+    Free;
+  end; // of try/finally
+end; // of function ReadPart
+
+//==============================================================================
+//=== procedure GetLastPart ====================================================
+//==============================================================================
+
+// procedure calls function ReadPart to read Lastpart from the registry
+// if ReadPart fails then it assigns default values to ThisPart
+
+procedure GetLastPart;
+begin
+  if not(ReadPart) then
+  begin
+    // there was no LastPart in the registry so
+    // assign default values to ThisPart
+    with ThisPart do
+    begin
+      PartDiameter := 4.6000;
+      AcrossFlats := 3.8600;
+      NumberOfFlats := 2;
+      ToolNumber := 12;
+      CutterDiameter := 2.5000;
+      XPos1 := -6.0500;
+      XPos2 := -7.0500;
+      RPM := 1000;
+      NumberOfEdges := 6;
+      FeedPerEdge := 0.0040;
+      DepthOfCut := 0.0500;
+      WorkOffset := 6;
+      Machine := 'VF-3';
+      ChamferTool := true;
+    end; // of with ThisPart do
+  end; // of if not(ReadPart)
+
+  // convert ThisPart values to strings
+  // and assign them to our TEdits
+  with ThisPart do
+  begin
+    str(PartDiameter: 2: 4, Temp);
+    FlatsForm.edtPartDiameter.Text := Temp;
+    str(AcrossFlats: 2: 4, Temp);
+    FlatsForm.edtAcrossFlats.Text := Temp;
+    FlatsForm.edtNumberOfFlats.Text := IntToStr(NumberOfFlats);
+    FlatsForm.edtToolNumber.Text := IntToStr(ToolNumber);
+    str(CutterDiameter: 1: 4, Temp);
+    FlatsForm.edtCutterDiameter.Text := Temp;
+    str(Xpos1: 2: 4, Temp);
+    while (length(Temp) < 8) do
+      Temp := ' ' + Temp;
+    FlatsForm.edtXPos1.Text := Temp;
+    str(XPos2: 2: 4, Temp);
+    if (XPos2 <> 0.0) then
+    begin
+      while (length(Temp) < 8) do
+        Temp := ' ' + Temp;
+      FLatsForm.edtXPos2.Text := Temp
+    end else
+      FlatsForm.edtXPos2.Text := '--none--';
+    FlatsForm.edtSpindleSpeed.Text := IntToStr(RPM);
+    FlatsForm.edtNumberOfEdges.Text := IntToStr(NumberOfEdges);
+    str(FeedPerEdge: 0: 4, Temp);
+    FlatsForm.edtFeedPerEdge.Text := Temp;
+    str(DepthOfCut: 0: 4, Temp);
+    FlatsForm.edtDepthOfCut.text := Temp;
+    FlatsForm.edtWorkOffset.Text := IntToStr(WorkOffset);
+  end; // of withThisPart do
+  UpdateFeedRate;
+  Started := true;
+end; // of procedure GetLastPart
+
+//==============================================================================
+//=== procedures for writing the G-Code file to disk ===========================
+//==============================================================================
+//=== procedure WriteFirstXPosition ============================================
+//==============================================================================
+
+// I'll call WriteFirstXPosition (with the A rotation) to position flats cutter
+// at the X, Y and A starting point for each A-axis rotation I need a flat on.
+
+procedure WriteFirstXPosition(const A: Integer);
+begin
+  with ThisPart do
+  begin
+    WriteLn(f, '( A', A, ' Side )');
+    WriteLn(f, 'G00 X', XPos1: 2: 4, ' Y', YApproach: 2: 4, ' A', A, '.');
+    WriteLn(f, 'M97 P', ToolNumber, '00');
+    if (XPos2 = 0) then WriteLn(f);
+  end; // of With ThisPart Do
+end; // of procedure WriteFirstXPosition
+
+//==============================================================================
+//=== procedure WriteStepOver ==================================================
+//==============================================================================
+
+// And I'll call WriteStepOver if I need a stepover at that A-axis rotation.
+
+procedure WriteStepover;
+begin
+  with ThisPart do
+  begin
+    WriteLn(f, 'G00 X', XPos2: 2: 4, ' Y', YApproach: 2: 4);
+    WriteLn(f, 'M97 P', ToolNumber, '00');
+    WriteLn(f);
+  end; // of With ThisPart Do
+end; // of procedure WriteStepover
+
+//==============================================================================
+//=== procedure ChamferStartLeft ===============================================
+//==============================================================================
+
+// I'll call ChamferStartLeft (with the A side I'm working on) to start the
+// chamfering tool on the left. I used this for A0 because we get to this A
+// rotation quicker after milling the flats and because it's easier to observe
+// from the door of the machine so we can drive slow and make sure we don't
+// gouge the part. My math might be fukd-up.
+
+procedure ChamferStartLeft(const Side: Integer);
+begin
+  WriteLn(f, '( Chamfer A', Side, ' Side )');
+  Write(f, 'G00 X', LeftEdge + 0.1 + RadiusToSwing: 2: 4, ' Y-.1 ');
+
+  // VF-6 A-Axis rotation is opposite the VF-3's
+  if (ThisPart.Machine = 'VF-3') then
+    WriteLn(f, 'A', Side + Angle: 3: 3)
+  else
+    WriteLn(f, 'A', Side - Angle: 3: 3);
+
+  WriteLn(f, 'G01 Z.1 F40.');
+  Write(f, 'G01 G41 X', LeftEdge + RadiusToSwing: 2: 4);
+  if (RadiusToSwing > 0) then
+    Write(f, ' Y', RadiusToSwing: 2: 4, ' Z0')
+  else
+    Write(f, ' Y0  Z-.02');
+
+  // VF-3 uses T14, VF-6 uses T3
+  if (ThisPart.Machine = 'VF-3') then
+    WriteLn(f, ' D14 F10.')
+  else
+    WriteLn(f, ' D03 F10.');
+
+  if (RadiusToSwing > 0) then
+    WriteLn(f, 'G3 X', LeftEdge:2:4, ' Y0 R', RadiusToSwing: 2: 4, ' Z-.02');
+  WriteLn(f, 'G01 X', LeftEdge + XShift: 2: 4, ' Z-', ZMove: 1: 4, ' A', Side, '. F20.');
+  Write(f, 'G01 X', LeftEdge: 2: 4, ' Z-.02 ');
+
+  // VF-6 A-Axis rotation is opposite the VF-3's
+  if (ThisPart.Machine = 'VF-3') then
+    WriteLn(f, 'A', Side - Angle: 3: 3)
+  else
+    WriteLn(f, 'A', Side + Angle: 3: 3);
+
+  if (RadiusToSwing > 0) then
+    WriteLn(f, 'G3 X', LeftEdge + RadiusToSwing: 2: 4, ' Y-', RadiusToSwing: 2: 4,
+      ' R',RadiusToSwing:2:4, ' Z0');
+  WriteLn(f, 'G01 X', LeftEdge + 0.1 + RadiusToSwing: 2: 4, ' Y.1 Z.1');
+  WriteLn(f, 'G00 X', RightEdge - 0.1 - RadiusToSwing: 2: 4);
+  Write(f, 'G01 X', RightEdge - RadiusToSwing: 2: 4);
+  if (RadiusToSwing > 0) then
+    Write(f, ' Y-', RadiusToSwing: 2: 4, ' Z0')
+  else
+    Write(f,' Y0  Z-.02');
+  WriteLn(f, ' F10.');
+  if (RadiusToSwing > 0) then
+    WriteLn(f, 'G3 X', RightEdge: 2: 4,' Y0 R', RadiusToSwing: 2: 4, ' Z-.02');
+  WriteLn(f, 'G01 X', RightEdge - XShift: 2: 4, ' Z-', ZMove: 1: 4, ' A', Side, '. F20.');
+  Write(f, 'G01 X', RightEdge: 2: 4, ' Z-.02 ');
+
+  // VF-6 A-Axis rotation is opposite the VF-3's
+  if (ThisPart.Machine = 'VF-3') then
+    WriteLn(f, 'A', Side + Angle: 3: 3)
+  else
+    WriteLn(f, 'A', Side - Angle: 3: 3);
+
+  if (RadiusToSwing > 0) then
+    WriteLn(f, 'G3 X', RightEdge - RadiusToSwing: 2: 4,' Y', RadiusToSwing: 2: 4,
+      ' R', RadiusToSwing: 2: 4, ' Z0');
+  WriteLn(f, 'G01 G40 X', RightEdge - 0.1 - RadiusToSwing: 2: 4, ' Y-.1 Z.1');
+  WriteLn(f, 'G00 Z.5');
+  WriteLn(f);
+end; // of procedure ChamferStartLeft
+
+//==============================================================================
+//=== procedure ChamferStartRight ==============================================
+//==============================================================================
+
+// I'll call ChamferStartRight (with the A side I'm working on) to start the
+// chamfering tool on the right. I used this for all other A rotations because
+// it's quicker to scoot over in X than it is to rotate A on around.
+
+procedure ChamferStartRight(const Side: Integer);
+begin
+  WriteLn(f, '( Chamfer A', Side, ' Side )');
+  Write(f, 'G00 X', RightEdge - 0.1 - RadiusToSwing: 2: 4, ' Y.1 ');
+
+  // VF-6 A-Axis rotation is opposite the VF-3's
+  if (ThisPart.Machine = 'VF-3') then
+    WriteLn(f, 'A', Side - Angle: 3: 3)
+  else
+    WriteLn(f, 'A', Side + Angle: 3: 3);
+
+  WriteLn(f, 'G01 Z.1 F40.');
+  Write(f, 'G01 G41 X', RightEdge - RadiusToSwing: 2: 4);
+  if (RadiusToSwing > 0) then
+    Write(f, ' Y-', RadiusToSwing: 2: 4, ' Z0')
+  else
+    Write(f, ' Y0  Z-.02');
+  WriteLn(f, ' F10.');
+  if (RadiusToSwing > 0) then
+    WriteLn(f, 'G3 X', RightEdge:2:4, ' Y0 R', RadiusToSwing:2:4, ' Z-.02');
+  WriteLn(f, 'G01 X', RightEdge - XShift: 2: 4, ' Z-', ZMove: 1: 4, ' A', Side, '. F20.');
+  Write(f, 'G01 X', RightEdge: 2: 4, ' Z-.02 ');
+
+  // VF-6 A-Axis rotation is opposite the VF-3's
+  if (ThisPart.Machine = 'VF-3') then
+    WriteLn(f, 'A', Side + Angle: 3: 3)
+  else
+    WriteLn(f, 'A', Side - Angle: 3: 3);
+
+  if (RadiusToSwing > 0) then
+    WriteLn(f, 'G3 X', RightEdge - RadiusToSwing: 2: 4, ' Y', RadiusToSwing: 2: 4,
+      ' R', RadiusToSwing: 2: 4, ' Z0');
+  WriteLn(f, 'G01 X', RightEdge - 0.1 - RadiusToSwing: 2: 4, ' Y-.1 Z.1');
+  WriteLn(f, 'G00 X', LeftEdge + 0.1 + RadiusToSwing: 2: 4);
+  Write(f, 'G01 X', LeftEdge + RadiusToSwing: 2: 4);
+  if (RadiusToSwing > 0) then
+    Write(f, ' Y', RadiusToSwing: 2: 4, ' Z0')
+  else
+    Write(f, ' Y0 Z-.02');
+  WriteLn(f, ' F10.');
+  if (RadiusToSwing > 0) then
+    WriteLn(f, 'G3 X', Leftedge: 2: 4, ' Y0 R', RadiusToSwing: 2: 4, ' Z-.02');
+  WriteLn(f, 'G01 X', LeftEdge + XShift: 2: 4, ' Z-', Zmove: 1: 4, ' A', Side, '. F20.');
+  Write(f, 'G01 X', LeftEdge: 2: 4, ' Z-.02 ');
+
+  // VF-6 A-Axis rotation is opposite the VF-3's
+  if (ThisPart.Machine = 'VF-3') then
+    WriteLn(f, 'A', Side - Angle: 3: 3)
+  else
+    WriteLn(f, 'A', Side + Angle: 3: 3);
+
+  if (RadiusToSwing > 0) then
+    WriteLn(f, 'G3 X', Leftedge + RadiusToSwing: 2: 4, ' Y-', RadiusToSwing: 2: 4,
+      ' R', RadiusToSwing: 2: 4, ' Z0');
+  WriteLn(f, 'G01 G40 X', LeftEdge + 0.1 + RadiusToSwing: 2: 4, ' Y.1 Z.1');
+  WriteLn(f, 'G00 Z.5');
+  WriteLn(f);
+end; // of procedure ChamferStartRight
+
+//==============================================================================
+//=== ROUTINES FOR THE 2 BUTTONS AND THE MENU ITEMS IN THE TMEMO ===============
+//==============================================================================
+//=== WriteFile Button Methods =================================================
+//==============================================================================
+
+procedure TFlatsForm.btnWriteFileEnter(Sender: TObject);
+begin
+  memoHints.Height := 22;
+  if not(IsDrive) then
+    memoHints.Text := 'Make A Removable Drive Available, Then Click Write File.'
+  else
+    memoHints.Text := 'Click Write File to Write File to Removable Disk';
+  LastActive := btnWriteFile;
+end; // of btnWriteFileEnter method
+
+procedure TFlatsForm.btnWriteFileClick(Sender: TObject);
+label
+  GetName;
+var
+  SaveCursor: hCursor; // restore cursor after writing file
+  ErrorMode: word; // Store current ErrorMode
+
+  //============================================================================
+  // embeded function Valid checks all TEdits for validity =====================
+  // It sets Valid to True or False before file is written to Removable Disk.
+
+  function Valid: boolean;
+  begin
+    Valid := false;
+    with FlatsForm do
+    begin
+      // check PartDiameter
+      Val(edtPartDiameter.Text, ThisPart.PartDiameter, ValResult);
+      if (ValResult <> 0) or not(InRange(ThisPart.PartDiameter, MinPartDiameter,
+        MaxPartDiameter)) then
+      begin
+        memoHints.Text := 'Part Diameter must be between ' +
+          FloatToStr(MinPartDiameter + 0.00001) + ' and ' +
+          FloatToStr(MaxPartDiameter - 0.00001);
+        FlatsDlg(diStopInfo,'Invalid Part Diameter!');
+        edtPartDiameter.SetFocus;
+        exit;
+      end;
+
+      // check AcrossFlats
+      Val(edtAcrossFlats.Text, ThisPart.AcrossFlats, ValResult);
+      if (ValResult <> 0) or not(InRange(ThisPart.AcrossFlats, MinAcrossFlats,
+        ThisPart.PartDiameter)) then
+      begin
+        memoHints.Text := 'Distance Across Flats must be between ' +
+          FloatToStr(MinAcrossFlats + 0.00001) + ' and ' +
+          edtPartDiameter.Text;
+        FlatsDlg(diStopInfo,'Invalid Distance Across Flats!');
+        edtAcrossFlats.SetFocus;
+        exit;
+      end;
+
+      // check NumberOfFlats
+      Val(edtNumberOfFlats.Text, ThisPart.NumberOfFlats, ValResult);
+      if (ValResult <> 0) or not(edtNumberOfFlats.Text[1] in ['2', '4']) then
+      begin
+        memoHints.Text := 'Number Of Flats must be either 2 or 4';
+        FlatsDlg(diStopInfo,'Invalid Number Of Flats!');
+        edtNumberOfFlats.SetFocus;
+        exit;
+      end;
+
+      // check ToolNumber
+      Val(edtToolNumber.Text, ThisPart.ToolNumber, ValResult);
+      if (ValResult <> 0) or not(InRange(ThisPart.ToolNumber, 1, 20)) then
+      begin
+        memoHints.Text := 'Tool Number must be between 1 and 20!';
+        FlatsDlg(diStopInfo,'Invalid Tool Number!');
+        edtToolNumber.SetFocus;
+        exit;
+      end;
+
+      // check CutterDiameter
+      Val(edtCutterDiameter.Text, ThisPart.CutterDiameter, ValResult);
+      if (ValResult <> 0) or not(InRange(ThisPart.CutterDiameter, MinCutterDiameter,
+        MaxCutterDiameter)) then
+      begin
+        memoHints.Text := 'Cutter Diameter must be between ' +
+          FloatToStr(MinCutterDiameter + 0.00001) + ' and ' +
+          FloatToStr(MaxCutterDiameter - 0.00001);
+        FlatsDlg(diStopInfo,'Invalid Cutter Diameter!');
+        edtCutterDiameter.SetFocus;
+        exit;
+      end;
+
+      // check XPos1
+      Val(edtXPos1.Text, ThisPart.XPos1, ValResult);
+      if (ValResult <> 0) or (ThisPart.XPos1 = 0)
+        or (Abs(ThisPart.XPos1) > MaxXPosition) then
+      begin
+        memoHints.Text := 'X Positions must be more than zero but less than ' +
+          floattostr(MaxXPosition - 0.00001);
+        FlatsDlg(diStopInfo,'Invalid X Position #1!');
+        edtXPos1.SetFocus;
+        exit;
+      end;
+
+      // check XPos2
+      if (edtXPos2.Text <> '--none--') then
+      begin
+        Val(edtXPos2.Text, ThisPart.XPos2, ValResult);
+        if (ValResult <> 0) or (Abs(ThisPart.XPos2) > MaxXPosition) then
+        begin
+          memoHints.Text := 'X Position #2 must either be ZERO or the same sign ' +
+                            'as X Position #1!';
+          FlatsDlg(diStopInfo,'Invalid X Position #2!');
+          edtXPos2.SetFocus;
+          exit;
+        end else
+        // Don't allow them to cross X Zero!
+        if ((ThisPart.XPos1 < 0) and (ThisPart.XPos2 > 0))
+          or ((ThisPart.XPos1 > 0) and (ThisPart.XPos2 < 0)) then
+        begin
+          memoHints.Text := 'X Position #2 must be on the same side of X Zero ' +
+                            'as X Position #1';
+          FlatsDlg(diStopInfo,'Invalid X Position #2!');
+          edtXPos2.SetFocus;
+          exit;
+        end;
+      end else
+        // XPos2.Text = '--none--' so...
+        ThisPart.XPos2 := 0;
+
+      // check SpindleSpeed
+      Val(edtSpindleSpeed.Text, ThisPart.RPM, ValResult);
+      if (ValResult <> 0) or not(InRange(ThisPart.RPM, MinSpindleSpeed,
+        MaxSpindleSpeed)) then
+      begin
+        memoHints.Text := 'Spindle Speed must be between ' +
+          IntToStr(MinSpindleSpeed) + ' and ' + IntToStr(MaxSpindleSpeed);
+        FlatsDlg(diStopInfo,'Invalid Spindle Speed!');
+        edtSpindleSpeed.SetFocus;
+        exit;
+      end;
+
+      // check NumberOfEdges
+      Val(edtNumberOfEdges.Text, ThisPart.NumberOfEdges, ValResult);
+      if (ValResult <> 0) or not(InRange(ThisPart.NumberOfEdges, MinNumberOfEdges,
+        MaxNumberOfEdges)) then
+      begin
+        memoHints.Text := 'Number Of Edges must be between ' +
+          IntToStr(MinNumberOfEdges) + ' and ' + IntToStr(MaxNumberOfEdges);
+        FlatsDlg(diStopInfo,'Invalid Number Of Edges!');
+        edtNumberOfEdges.SetFocus;
+        exit;
+      end;
+
+      // check FeedPerEdge
+      Val(edtFeedPerEdge.Text, ThisPart.FeedPerEdge, ValResult);
+      if (ValResult <> 0) or not(InRange(ThisPart.FeedPerEdge, MinFeedPerEdge,
+        MaxFeedPerEdge)) then
+      begin
+        memoHints.Text := 'Feed Per Edge must be between ' +
+          FloatToStr(MinFeedPerEdge + 0.0001) + ' and ' +
+          FloatToStr(MaxFeedPerEdge - 0.00001);
+        FlatsDlg(diStopInfo,'Invalid Feed Per Edge!');
+        edtFeedPerEdge.SetFocus;
+        exit;
+      end;
+
+      // ensure correct FeedRate is being displayed and ProgFeedRate is set
+      UpdateFeedRate;
+
+      // check DepthOfCut
+      Val(edtDepthOfCut.Text, ThisPart.DepthOfCut, ValResult);
+      if (ValResult = 0) then
+        ThisPart.DepthOfCut := Abs(ThisPart.DepthOfCut)
+      else ThisPart.DepthOfCut := 0.0;
+      if not(InRange(ThisPart.DepthOfCut, MinDepthOfCut, MaxDepthOfCut)) then
+      begin
+        memoHints.Text := 'Depth Of Cut must be between ' +
+          FloatToStr(MinDepthOfCut + 0.00001) + ' and ' +
+          FloatToStr(MaxDepthOfCut - 0.00001);
+        FlatsDlg(diStopInfo,'Invalid Depth Of Cut!');
+        edtDepthOfCut.SetFocus;
+        exit;
+      end;
+
+      // check WorkOffset
+      if (Length(edtWorkOffset.Text) = 1)
+        and (edtWorkOffset.Text[1] in ['4'..'9']) then
+      begin
+        Temp := edtWorkOffset.Text;
+        Val(Temp, ThisPart.WorkOffset, ValResult);
+        Valid := True;
+      end else
+      begin
+        memoHints.Text := 'Work Offset must be between 4 and 9 (for G54 thru G59)';
+        FlatsDlg(diStopInfo,'Invalid Work Offset!');
+        edtWorkOffset.SetFocus;
+      end;
+    end; // of with FlatsForm do
+  end; // of function Valid ====================================================
+  //============================================================================
+
+// and here's btnWriteFileClick method
+begin
+  // Remove the focus from btnWriteFile before we disable it
+  edtWorkOffset.SetFocus;
+  // disable the buttons on FlatsForm
+  btnWriteFile.Enabled := false;
+  btnExit.Enabled := false;
+
+  // Tell em' we're checking their input
+  memoHints.Height := 22;
+  memoHints.Text := 'Validating input...';
+
+  if Valid then
+  begin
+    // If there is no available removabel device to write the G-Code to
+    // tell 'em so and exit btnWriteFileClick procedure.
+    if not(IsDrive) then
+    begin
+      memoHints.Text := 'Make a Removable Drive available and try again!';
+      FlatsDlg(diStopInfo,'There is no device to write the file to!');
+      // re-enable the buttons on FlatsForm
+      btnWriteFile.Enabled := true;
+      btnExit.Enabled := true;
+      btnWriteFile.SetFocus;
+      exit;
+    end;
+
+    // See which machine they want G-Code for
+    case FlatsDlg(diMachineInfo, 'Choose Machine (VF-3 or VF-6)',
+      'G-Code Is Different For These Machines!') of
+      mrYes: ThisPart.Machine := 'VF-3';
+      mrNo: ThisPart.Machine := 'VF-6';
+    else
+      // they clicked Cancel
+      begin
+        // re-enable the buttons on FlatsForm
+        btnWriteFile.Enabled := true;
+        btnExit.Enabled := true;
+        btnWriteFile.SetFocus;
+        exit; // they chose to cancel writing the file so exit this method
+      end;
+    end; // of case FlatsDlg of
+
+    GetName: // jump back here to repeat the NameInfo dialog
+    case FlatsDlg(diFileInfo) of
+      mrYes: ThisPart.ChamferTool := true;
+      mrNo, mrOK: ThisPart.ChamferTool := false
+    else
+      // they clicked Cancel
+      begin
+        // re-enable the buttons on FlatsForm
+        btnWriteFile.Enabled := true;
+        btnExit.Enabled := true;
+        btnWriteFile.SetFocus;
+        exit; // they chose to cancel writing the file so exit this method
+      end;
+    end; // of case FlatsDlg of
+
+    // Make sure they didn't choose the reserved tool
+    if (ThisPart.ChamferTool) then
+    begin
+      if ((ThisPart.ToolNumber = 14) and (ThisPart.Machine = 'VF-3')) or
+        ((ThisPart.ToolNumber = 3) and (ThisPart.Machine = 'VF-6')) then
+      begin
+        memoHints.Text := 'Select A Different Tool Number!';
+        FlatsDlg(diStopInfo,'T-' + edtToolNumber.Text + ' Is The Chamfer Tool On The ' + ThisPart.Machine);
+        edtToolNumber.SetFocus;
+        btnWriteFile.Enabled := true;
+        btnExit.Enabled := true;
+        exit;
+      end;
+    end;
+
+    // If File exists see if they want to overwrite it
+    if (DiskInDrive(DrvLtr[1])) then
+    begin
+      if FileExists(DrvLtr + DiskFileName) then
+      begin
+        TempText := '';
+        AssignFile(f, DrvLtr + DiskFileName);
+        try
+          Reset(f);
+          while not (eof(f)) and (pos('%', TempText) = 0) do
+            ReadLn(f, TempText);
+          if not (eof(f)) then ReadLn(f, TempText);
+        finally
+          CloseFile(f);
+        end; // of Try
+        memoHints.Height := 40;
+        memoHints.Text := 'Contents of existing file '+DiskFileName+' on Drive '+DrvLtr;
+        if (length(TempText) = 0) or (pos('(', TempText) = 0) then
+          TempText := '(Contents of file is undetermined. File contains no comments.)';
+        memoHints.Lines.Add(TempText);
+        if not (FlatsDlg(diWarningInfo,'File Exists! Overwrite Existing File?',
+          ' This File Will Overwrite The Existing File! ') = mrYes) then
+          goto GetName;
+      end; // of if FileExists
+    end else
+      goto GetName;
+
+    // Let's let them change the file comment
+    FlatsDlg(diCommentInfo);
+
+    // now lets tell 'em what we're doing and write the file
+    memoHints.Text := 'Writing file ' + DiskFileName + ' to ' + DrvLtr;
+    SaveCursor := Screen.Cursor;
+    Screen.Cursor := crHourGlass;
+    GetCursorPos(pt);
+    SetCursorPos(pt.X, pt.Y);
+    Application.ProcessMessages;
+
+    AssignFile(f, DrvLtr + DiskFileName);
+    // Turn off critical errors
+    ErrorMode := SetErrorMode(SEM_FailCriticalErrors);
+    {$IOCHECKS OFF}
+    try
+      Rewrite(f);
+      with ThisPart do
+      begin
+        // Get the numbers to trig out the Y moves.
+        TotalZDepth := (PartDiameter - AcrossFlats) / 2;
+        PartRadius := PartDiameter / 2;
+        ToolRadius := CutterDiameter / 2;
+        // Find the edges of the flats for comments and for the Chamfer tool
+        FindEdges;
+        // Write the file header...
+        WriteLn(f, '%');
+        WriteLn(f, DiskFileName, ' (', FileComment, ')');
+        WriteLn(f);
+        WriteLn(f, '( G5', WorkOffset, ' Work Offset )');
+        case WorkOffset of
+          4: Write(f, '#5223');
+          5: Write(f, '#5243');
+          6: Write(f, '#5263');
+          7: Write(f, '#5283');
+          8: Write(f, '#5303');
+          9: Write(f, '#5323');
+        end;
+        if (Machine = 'VF-3') then
+          WriteLn(f, ' = ', 4.0 + PartRadius:2:4)
+        else
+          WriteLn(f, ' = ', -19.039 + PartRadius:2:4);
+        WriteLn(f);
+        WriteLn(f, '( T', ToolNumber, ' = ', CutterDiameter: 1: 4, ' Inch Cutter )');
+        // Only chamfer flats deeper than .150"
+        if (ChamferTool) then
+          if (Machine = 'VF-3') then
+            WriteLn(f, '( T14 = 90 Deg. Spade Drill )')
+          else
+            WriteLn(f, '( T3 = 90 Deg. Spade Drill )');
+        WriteLn(f);
+        WriteLn(f, '( Part Diameter = ', PartDiameter: 2: 4, ' )');
+        WriteLn(f, '( Distance across flats = ', AcrossFlats: 2: 4, ' )');
+        WriteLn(f, '( Number of flats = ', NumberOfFlats: 1, ' )');
+        WriteLn(f, '( Left edge of flat @ X', LeftEdge: 2: 4, ' from X Zero )');
+        WriteLn(f, '( Right edge of flat @ X', RightEdge: 2: 4, ' from X Zero )');
+        WriteLn(f, '( Width of flat = ', Abs(LeftEdge - RightEdge): 2: 4, ' )');
+        WriteLn(f, '( Depth of cut = ', DepthOfCut: 1: 4, ' )');
+        WriteLn(f);
+        if (Machine = 'VF-3') then
+          Write(f, 'T', ToolNumber, ' M06')
+        else
+          Write(f, 'G65 P50 T', ToolNumber);
+        WriteLn(f, ' ( ', CutterDiameter: 1: 4, ' Inch Cutter )');
+        Write(f, 'G00 G90 G5', WorkOffset, ' X', XPos1: 2: 4, ' ');
+        YApproach := Sqrt(Sqr(PartRadius) - Sqr(PartRadius - DepthOfCut));
+        YApproach := YApproach + ToolRadius + 0.05;
+        WriteLn(f, 'Y', YApproach: 2: 4, ' A0. S', RPM, ' M3');
+        WriteLn(f, 'G43 Z.5 H', ToolNumber);
+        WriteLn(f);
+        // A0 Side
+        WriteFirstXPosition(0);
+        if (XPos2 <> 0) then WriteStepover;
+        // A90 side - if NumberOfFlats=4
+        if (NumberOfFlats = 4) then
+        begin
+          WriteFirstXPosition(90);
+          if (XPos2 <> 0) then WriteStepover;
+        end;
+        // A180 Side
+        WriteFirstXPosition(180);
+        if (XPos2 <> 0) then WriteStepOver;
+        // A270 side - if NumberOfFlats=4
+        if (NumberOfFlats = 4) then
+        begin
+          WriteFirstXPosition(270);
+          if (XPos2 <> 0) then WriteStepover;
+        end;
+        WriteLn(f, 'G00 G90 Z5.');
+        // Start of code for Chamfer tool.
+        // Only chamfer flats deeper than .150"
+        if (ChamferTool) then
+        begin
+          WriteLn(f, 'M1');
+          WriteLn(f);
+          WriteLn(f);
+          // Keep the chamfer tool .02 inside the edges.
+          LeftEdge := LeftEdge + 0.02;
+          RightEdge := RightEdge - 0.02;
+          // Set the Z move.
+          ZMove := TotalZDepth - 0.01;
+          // But clamp it at .4000 deep.
+          if (ZMove > 0.4000) then ZMove := 0.4000;
+          // Set amount to shift X during the Z move.
+          XShift := ZMove - 0.015; // Z starts at Z-.02. Shift X .005 more.
+          // Calculate the Angle.
+          SideAdjacent := AcrossFlats / 2;
+          // Change amount to rotate angle below.
+          if AngleMod = 0 then
+          begin
+            AngleMod := 0.02;
+            RadiusToSwing := 0.0;
+          end;
+          SideOpposite := Sqrt(Sqr(PartRadius - AngleMod) - Sqr(SideAdjacent));
+          Angle := ArcTan(SideOpposite / SideAdjacent);
+          // Convert Angle from radians to degrees.
+          Angle := Angle * 57.29578; // 180 / Pi
+          // Write the chamfer tool G-code to the file.
+          if (Machine = 'VF-6') then
+            WriteLn(f, 'G65 P50 T3 ( 90 Deg. Spade Drill )')
+          else
+            WriteLn(f, 'T14 M06 ( 90 Deg. Spade Drill )');
+          WriteLn(f, 'S5000 M3');
+          // set A approach depending on machine
+          Write(f, 'G00 G90 G5',WorkOffset,' X',LeftEdge+0.1:2:4,' Y-.1 ');
+          if (ThisPart.Machine = 'VF-3') then
+            WriteLn(f, 'A',Angle:3:3)
+          else
+            WriteLn(f, 'A-',Angle:3:3);
+          //
+          Write(f, 'G43 Z.5 ');
+          if (Machine = 'VF-3') then
+            WriteLn(f, 'H14')
+          else
+            WriteLn(f, 'H3');
+          WriteLn(f);
+          ChamferStartLeft(0);
+          if (NumberOfFlats = 4) then
+            ChamferStartRight(90);
+          ChamferStartRight(180);
+          if (NumberOfFlats = 4) then
+            ChamferStartRight(270);
+          WriteLn(f, 'G00 Z5. A180.');
+        end; // of chamfer tool code
+        if (Machine = 'VF-3') or (not(ChamferTool)) then
+          WriteLn(f, 'G91 G28 Y0.');
+        // Change back to the flats cutter if we ran the chamfer tool
+        if (ChamferTool) then
+        begin
+          if (Machine = 'VF-6') then
+            WriteLn(f, 'G65 P50 T', ToolNumber)
+          else
+            WriteLn(f, 'T', ToolNumber, ' M06');
+        end; // if (ChamferTool)
+        WriteLn(f, 'M30');
+        WriteLn(f);
+        WriteLn(f);
+        // Done writing the main part of the G-code program to the file.
+        // Still gotta write the subroutine for the Y moves...
+        WriteLn(f, 'N', ToolNumber, '00 ( Flats Subroutine )');
+        WriteLn(f);
+        TotalZDepth := (PartDiameter - AcrossFlats) / 2;
+        ZDepthThisPass := 0;
+        PassNumber := 0;
+        while (ZDepthThisPass < TotalZDepth - 0.0001) do
+        begin
+          // Increment the PassNumber
+          inc(PassNumber);
+          // Add DepthOfCut to ZDepthThisPass
+          ZDepthThisPass := ZDepthThisPass + DepthOfCut;
+          // Make sure Z doesn't go any deeper than it's supposed to
+          if (ZDepthThisPass > TotalZDepth) then ZDepthThisPass := TotalZDepth;
+          // Calculate our YApproach
+          YApproach := Sqrt(Sqr(PartRadius) - Sqr(PartRadius - ZDepthThisPass));
+          YApproach := YApproach + ToolRadius + 0.05;
+          // Write the YApproach and Z move to the file
+          WriteLn(f, '( Pass #', PassNumber, ' )');
+          WriteLn(f, 'G00 Y', YApproach: 2: 4);
+          WriteLn(f, 'G01 Z-', ZDepthThisPass: 1: 4, ' F40.');
+          // Calculate the YMove
+          YMove := Sqrt(Sqr(PartRadius) - Sqr(PartRadius - ZDepthThisPass));
+          // If not the last pass just break thru steel + .05
+          if (ZDepthThisPass < TotalZDepth - 0.0001) then
+            YMove := YMove + 0.05
+          else // Otherwise make it the same as our YApproach
+            YMove := YApproach;
+          WriteLn(f, 'G01 Y-', YMove: 2: 4, ' F', ProgFeedRate: 2: 2);
+          // If not the last pass just rapid up to Z.1
+          if (ZDepthThisPass < TotalZDepth - 0.0001) then
+            WriteLn(f, 'G00 Z.1')
+          else // Otherwise clear by .5 for repositioning.
+            WriteLn(f, 'G00 Z.5');
+          WriteLn(f);
+        end; // of While loop
+        WriteLn(f, 'M99');
+        WriteLn(f, '%');
+        inc(ThisPart.FilesWritten);
+        ThisPart.LastUsed := now;
+      end; // of with ThisPart do
+    finally
+      CloseFile(f);
+      // Turn critical errors back on
+      SetErrorMode(ErrorMode);
+      Screen.Cursor := SaveCursor;
+      GetCursorPos(pt);
+      SetCursorPos(pt.X, pt.Y);
+    end; // of try/finally
+
+    {$IOCHECKS ON}
+
+    // if there was a problem saving the file let them know
+    if (IOResult <> 0) then
+    begin
+      CloseFile(f);
+      memoHints.Text := 'Check Disk In Drive ' + DrvLtr + ' and try again!';
+      FlatsDlg(diStopInfo,'Disk Error!  Disk Is Probably Full!');
+      if FileExists(DrvLtr+DiskFileName) then
+        DeleteFile(DrvLtr+DiskFileName);
+      memoHints.Text := 'File was not saved to disk!';
+      btnWriteFile.Enabled := true;
+      btnExit.Enabled := true;
+      btnWriteFile.SetFocus;
+      Exit;
+    end;
+
+    // save this part record in the registry
+    SavePart;
+
+    Application.ProcessMessages;
+    memoHints.Text := 'File ' + DiskFileName + ' has been saved to Drive ' + DrvLtr;
+    // get out of here
+    CloseDialog(fsJustWritten);
+  end else // of if Valid
+  begin
+    // we had some invalid entries and didn't write
+    // the file, so re-enable the buttons on FlatsForm
+    btnWriteFile.Enabled := true;
+    btnExit.Enabled := true;
+  end;
+end; // of procedure btnWriteFileClick
+
+//==============================================================================
+//=== Start of code for TMemo if they chose Edit File from the CloseDialog =====
+//==============================================================================
+
+procedure TFlatsForm.FileEdit;
+begin
+
+  // Make sure the disk is still there and our file is on it
+  while not(DiskInDrive(DrvLtr[1])) or not(FileExists(DrvLtr + DiskFileName)) do
+    if MessageDlgPos('Re-Insert disk in Drive ' + DrvLtr, mtWarning,[mbRetry,mbCancel],
+      0,FlatsForm.Left + 225, FlatsForm.Top + 200) = mrCancel then
+    begin
+      Application.Terminate;
+      Exit;
+    end;
+
+  // Make our Menu Bar items visible
+  mnuSave.Enabled := false;
+  mnuExit.Caption := 'Exit';
+  mnuSearch.Visible := true;
+  mnuSave.Visible := true;
+  mnuExit.Visible := true;
+
+  // Create an edit window
+  Memo := TMemo.Create(FlatsForm);
+  with Memo do
+  begin
+    Parent := FlatsForm;
+    Font.Charset := ANSI_CHARSET;
+    Font.Color := clWindowText;
+    Font.Name := 'System';
+    Font.Style := [fsBold];
+    Align := alClient;
+    FlatsForm.KeyPreview := false;
+    FlatsForm.Caption := 'File: ' + DiskFileName + ' on Drive ' + DrvLtr;
+    Lines.LoadFromFile(DrvLtr+DiskFileName);
+    ScrollBars := ssVertical;
+    OnChange := MemoChange;
+    SetFocus;
+  end; // of with Memo do
+end; // of procedure FileEdit
+
+//==============================================================================
+//=== MemoOnChange method ======================================================
+//==============================================================================
+
+// This enables the Save menu option upon change to G-Code file
+
+procedure TFlatsForm.MemoChange(Sender: TObject);
+begin
+  mnuSave.Enabled := true;
+  mnuExit.Caption := '&Exit w/o Saving';
+end; // of procedure MemoChange
+
+//==============================================================================
+//=== Search and Replace methods ===============================================
+//==============================================================================
+
+// Here's the Search and Replace Dialog
+
+procedure TFlatsForm.mnuSearchClick(Sender: TObject);
+label
+  GetSearch;
+var
+  AMsgDialog: TForm;
+  lblFindText: TLabel;
+  edtFindText: TEdit;
+  lblReplaceText: TLabel;
+  edtReplaceText: TEdit;
+  Ans: TModalResult;
+begin
+  GetSearch:
+  // Create the dialog
+  AMsgDialog := CreateMessageDialog(#13#10#13#10, MTCustom, [mbYes, mbCancel]);
+  // Create the FindText label
+  lblFindText := TLabel.Create(AMsgDialog);
+  // Create the FindText EditBox
+  edtFindText := TEdit.Create(AMsgDialog);
+  // Create the ReplaceText label
+  lblReplaceText := TLabel.Create(AMsgDialog);
+  // Create the ReplaceText EditBox
+  edtReplaceText := TEdit.Create(AMsgDialog);
+  // Set properties for this shit
+  with AMsgDialog do
+  try
+    BorderStyle := bsToolWindow;
+    Height := 130;
+    Width := 190;
+    Position := poOwnerFormCenter;
+    Font.Height := -12;
+    Font.Name := 'Arial';
+    Font.Style := [fsBold];
+    Caption := 'Search and Replace All';
+    btnYes := TButton(FindComponent('Yes'));
+    btnYes.Left := (AMsgDialog.Width div 2) - btnYes.Width - 3;
+    btnYes.Caption := '&Replace';
+    TButton(FindComponent('Cancel')).Left := (AMsgDialog.Width div 2) + 3;
+    // Set lblFindText properties
+    with lblFindText do
+    begin
+      Parent := AMsgDialog;
+      Left := 10;
+      Top := 15;
+      Font.Charset := ANSI_CHARSET;
+      Font.Color := clWindowText;
+      Font.Height := -12;
+      Font.Name := 'Arial';
+      Font.Style := [fsBold];
+      Caption := 'Search For:';
+    end; // of with lblFindText do
+    // Set edtFindText properties
+    with edtFindText do
+    begin
+      Parent := AMsgDialog;
+      TabOrder := 0;
+      Left := 105;
+      Top := 10;
+      Width := 65;
+      Font.Charset := ANSI_CHARSET;
+      Font.Color := clWindowText;
+      Font.Height := -12;
+      Font.Name := 'Arial';
+      Font.Style := [fsBold];
+      MaxLength := 9;
+      Text := FindText;
+    end; //of with edtFindText do
+    // Set lblReplaceText properties
+    with lblReplaceText do
+    begin
+      Parent := AMsgDialog;
+      Left := 10;
+      Top := 40;
+      Font.Charset := ANSI_CHARSET;
+      Font.Color := clWindowText;
+      Font.Height := -12;
+      Font.Name := 'Arial';
+      Font.Style := [fsBold];
+      Caption := 'Replace With:';
+    end; // of with lblReplaceText do
+    // Set edtReplaceText properties
+    with edtReplaceText do
+    begin
+      Parent := AMsgDialog;
+      TabOrder := 1;
+      Left := 105;
+      Top := 35;
+      Width := 65;
+      Font.Charset := ANSI_CHARSET;
+      Font.Color := clWindowText;
+      Font.Height := -12;
+      Font.Name := 'Arial';
+      Font.Style := [fsBold];
+      MaxLength := 9;
+      Text := ReplaceText;
+    end; //of with edtReplaceText do
+    Ans := ShowModal;
+  finally
+    // Grab the Edit Boxes
+    FindText := edtFindText.Text;
+    ReplaceText := edtReplaceText.Text;
+    // and clean this shit up
+    Free;
+  end; // of with AMsgDialog do
+  if Ans = mrCancel then exit;
+  if (FindText = '') or (ReplaceText = '') then
+  begin
+    MessageBeep(MB_IconHand);
+    MessageDlgPos('Both "Search For" and "Replace With" must contain entries!',
+      mtError, [mbOK], 0, FlatsForm.Left + 140, FlatsForm.Top + 200);
+    goto GetSearch;
+  end; // of if (FindText = '') or (ReplaceText = '')
+  ReplaceRoutine(Sender)
+end; // of procedure Search1Ckick
+
+//==============================================================================
+//=== Search and Replace method ================================================
+//==============================================================================
+
+procedure TFlatsForm.ReplaceRoutine(Sender: TObject);
+var
+  SelPos, SPos, SLen, TextLength: Integer;
+  SearchString: string;
+  Found, Replaced: Boolean;
+begin
+  Found := true;
+  Replaced := false;
+  PassNumber := 0;
+  TextLength := Length(Memo.Lines.Text);
+  // Here's for ReplaceAll
+  while Found do
+  begin
+    SPos := Memo.SelStart;
+    SLen := Memo.SelLength;
+    SearchString := Copy(Memo.Lines.Text, SPos + SLen + 1, TextLength - SLen + 1);
+    SelPos := Pos(FindText, SearchString);
+    if SelPos > 0 then begin
+      Memo.SelStart := (SelPos - 1) + (SPos + SLen);
+      Memo.SelLength := Length(FindText);
+      // remove this in the OnFind procedure:
+      Memo.SelText := ReplaceText;
+      Found := True;
+      Replaced := True;
+      inc(PassNumber);
+    end else
+      Found := false;
+  end; // of while Found do
+  if not (Replaced) then
+  begin
+    MessageBeep(MB_IconHand);
+    MessageDlg('Could not find "'+FindText+'" in '+DiskFileName,mtError,[mbOk],0);
+  end; // of if not (Replaced)
+  // This will position us back to the top of the file
+  with Memo do
+  begin
+    SelStart := 0;
+    Perform(EM_SCROLLCARET, 0, 0);
+  end; // of with Memo do
+  if (Replaced) then
+  begin
+    MessageBeep(MB_OK);
+    MessageDlgPos(FindText + ' was found ' + inttostr(PassNumber) + ' times and ' +
+      'replaced with ' + ReplaceText, mtInformation, [mbOK], 0, FlatsForm.Left + 160,
+      FlatsForm.Top + 200);
+  end; // of if (Replaced)
+end; // of procedure ReplaceDialog1Replace
+
+//==============================================================================
+//=== SaveClick method =========================================================
+//==============================================================================
+
+// This is for the Save menu item in the TMemo Edit window
+
+procedure TFlatsForm.mnuSaveClick(Sender: TObject);
+var
+  SaveCursor: hCursor; // restore cursor after writing file
+  ErrorFlag: boolean;
+begin
+  ErrorFlag := false;
+  // Make sure we still have a drive to write to
+  while not(DiskInDrive(DrvLtr[1])) do
+    if MessageDlgPos('Unable To Save Changes!'#13'Re-Insert disk in Drive '+
+      DrvLtr + #13 + 'And Click Retry To Try '#13'Saving Again Or ' +
+      'Click'#13'Cancel To Exit Editor.',mtError,[mbRetry,mbCancel],
+      0,FlatsForm.Left + 225,FlatsForm.Top+200) = mrCancel then
+    begin
+      Memo.Free;
+      CloseDialog(fsFileError);
+      Exit;
+    end;
+  // Now lets try saving the edited file
+  SaveCursor := Screen.Cursor;
+  Screen.Cursor := crHourGlass;
+  GetCursorPos(pt);
+  SetCursorPos(pt.X, pt.Y);
+
+  {$IOCHECKS OFF}
+
+  try
+    try
+      Memo.Lines.SaveToFile(DrvLtr+DiskFileName);
+    except
+      on E:Exception do
+      begin
+        FlatsDlg(diStopInfo,'Disk Error!  Disk Is Probably Full!');
+        ErrorFlag := true;
+      end; // of on E:Exception do
+    end; // of try/except
+  finally
+    Screen.Cursor := SaveCursor;
+    GetCursorPos(pt);
+    SetCursorPos(pt.X, pt.Y);
+  end; // of try/finally
+
+  {$IOCHECKS ON}
+
+  // If the Except clause caught an IOError lets
+  // delete the corrupt file and exit this proc
+  if (ErrorFlag) and (FileExists(DrvLtr+DiskFileName)) then
+  begin
+    DeleteFile(DrvLtr+DiskFileName);
+    Exit;
+  end; // of if (ErrorFlag)
+
+  // Lets try to catch any IOError that Delphi's Exception Handler
+  // might have missed, delete the corrupt file, and exit this proc
+  if (IOResult <> 0) and not(ErrorFlag) then
+  begin
+    FlatsDlg(diStopInfo,'Disk Error!  Disk Is Probably Full!');
+    if (FileExists(DrvLtr+DiskFileName)) then
+      DeleteFile(DrvLtr+DiskFileName);
+    Exit;
+  end; // of if (IOResult <> 0)
+
+  // We would have exited this proc if there was an IO error, so
+  // things must be cool.  Lets free the TMemo and shut down...
+  mnuSave.Visible := false;
+  mnuSearch.Visible := false;
+  mnuExit.Visible := false;
+  Memo.Free;
+  CloseDialog(fsSaved);
+end; // of procedure Save1Click
+
+//==============================================================================
+//=== ExitClick methods ========================================================
+//==============================================================================
+
+// This is for the Exit w/o saving menu item in the TMemo Edit window
+
+procedure TFlatsForm.mnuExitClick(Sender: TObject);
+begin
+  FlatsForm.KeyPreview := true;
+  // Check if the made any changes
+  if (mnuSave.Enabled = true) then
+  begin
+    // see if they will want to exit
+    if (FlatsDlg(diWarningInfo,'Exit without saving changes?',
+      'All Your Changes Will Be Lost!') = mrCancel) then
+        exit
+    else
+    begin
+      Memo.Free;
+      // did file get deleted during a previous attempt to save changes?
+      if (FileExists(DrvLtr+DiskFileName)) then
+        // obviously not
+        CloseDialog(fsAltered)
+      else
+        // indeed it did, so
+        CloseDialog(fsFileError);
+    end;
+  end else
+  // otherwise they never made any changes
+  begin
+    Memo.Free;
+    CloseDialog(fsUnaltered);
+  end; // of if (mnuSave.Enabled = true)
+end; // of procedure Exit1Click
+
+//==============================================================================
+//=== Main Form's btnExit Methods ==============================================
+//==============================================================================
+
+procedure TFlatsForm.btnExitEnter(Sender: TObject);
+begin
+  UpdateSpecs;
+  memoHints.Height := 22;
+  memoHints.Text := 'Click Exit to Exit program without writing file to Removable Disk';
+  LastActive := btnExit;
+end; // of procedure btnExitEnter
+
+procedure TFlatsForm.btnExitClick(Sender: TObject);
+begin
+  // check if they pressed Alt+X while in the edit window
+  if mnuSave.Visible then
+    mnuExitClick(Sender)
+  else
+  // otherwise they haven't written the file, they clicked the exit button
+    CloseDialog(fsNotWritten);
+end; // of procedure btnExitClick
+
+//==============================================================================
+//=== START OF CODE FOR THE TEDIT BOXES ========================================
+//==============================================================================
+//=== EDIT BOX KEYDOWN methods =================================================
+//==============================================================================
+//=== Integer Field KeyPress ===================================================
+//==============================================================================
+
+// I'm using this for all TEdit boxes that require integer input
+
+procedure TFlatsForm.IntEdtKeyPress(Sender: TObject; var Key: Char);
+// Key #8 is the Backspace key
+const backspace = #8;
+begin
+  // Check for Enter key and make it act like the Tab key
+  if (Ord(Key) = 13) then
+  begin
+    if HiWord(GetKeyState(VK_SHIFT)) <> 0 then
+      SelectNext(Sender as TWinControl, False, True)
+    else
+      SelectNext(Sender as TWinControl, True, True);
+    Key := #0
+  end; // of if (Ord(Key) = 13)
+  // Check for valid positive Integer key
+  if not (Key in [backspace, '0'..'9']) then
+    Key := #0;
+end; // of procedure IntEdtKeyPress
+
+//==============================================================================
+//=== Float Field KeyPress =====================================================
+//==============================================================================
+
+// I'm using this for all TEdit boxes that require real number input
+// with the exception of edtXPos1 and edtXPos2, which allow math functions
+
+procedure TFlatsForm.FloatEdtKeyPress(Sender: TObject; var Key: Char);
+// Key #8 is the Backspace key
+const backspace = #8;
+begin
+  // Check for Enter key and make it act like the Tab key
+  if Ord(Key) = 13 then
+  begin
+    if HiWord(GetKeyState(VK_SHIFT)) <> 0 then
+      SelectNext(Sender as TWinControl, False, True)
+    else
+      SelectNext(Sender as TWinControl, True, True);
+    Key := #0
+  end; // of if Ord(Key) = 13
+  // Check for valid positive/negative floating point number key
+  if not (Key in [backspace, '0'..'9', '.', '-']) then Key := #0;
+  if ((Key = '-') and (TEdit(sender).SelStart > 0)) then Key := #0;
+  if ((Key = '.') and (TEdit(Sender).SelStart = 0)) then exit;
+  if ((Key = '.') and (Pos('.', TEdit(sender).Text) > 0)) then Key := #0;
+end; // of procedure FloatEdtKeyPress
+
+//==============================================================================
+//=== Math Field KeyPress ======================================================
+//==============================================================================
+
+// I'm using this for edtXPos1 and edtXPos2 to allow arithmatic operators
+
+procedure TFlatsForm.MathEdtKeyPress(Sender: TObject; var Key: Char);
+// Key #8 is the Backspace key
+const backspace = #8;
+begin
+  // Check for Enter key and make it act like the Tab key
+  if Ord(Key) = 13 then
+  begin
+    if HiWord(GetKeyState(VK_SHIFT)) <> 0 then
+      SelectNext(Sender as TWinControl, False, True)
+    else
+      SelectNext(Sender as TWinControl, True, True);
+    Key := #0
+  end; // of if Ord(Key) = 13
+  // Check for valid positive/negative floating point number key
+  if not (Key in [backspace, '0'..'9', '.', '-', '+', '/']) then Key := #0;
+end; // of procedure MathEdtKeyPress
+
+//==============================================================================
+//=== EditBox KeyDown ==========================================================
+//==============================================================================
+
+// I'm using this for all TEdit boxes to handle the UpArrow/DownArrow
+
+procedure TFlatsForm.EdtBoxKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if not (ssAlt in Shift) then
+  case Key of
+    VK_UP: SelectNext(Sender as TWinControl, False, True);
+    VK_DOWN: SelectNext(Sender as TWinControl, True, True);
+  end; // of case Key of
+end; // of procedure EdtBoxKeyDown
+
+//==============================================================================
+//=== Here's our Edit Boxes ====================================================
+//==============================================================================
+//=== PartDiameter TEdit Box====================================================
+//==============================================================================
+
+// I'm using this OnClick event handler for all my Edit Box clicks.
+// It just selects the text in each Edit box when clicked.
+procedure TFlatsForm.edtPartDiameterClick(Sender: TObject);
+begin
+  TEdit(Sender).SelectAll;
+  TEdit(Sender).OnClick := nil
+end; // of procedure PartDiameterClick
+
+procedure TFlatsForm.edtPartDiameterEnter(Sender: TObject);
+begin
+  // Let's do a little initialization
+  if not (Started) then
+  begin
+    // Make the mouse snap to the Default Button in dialogs
+    Screen.OnActiveFormChange := OnActiveFormChange;
+    // Turn the CapsLock key on if it's not already
+    if (GetKeyState(VK_CAPITAL) = 0) then
+      SetCapsLockKey(VK_CAPITAL);
+    // Turn the NumLock key on if it's not already
+    if (GetKeyState(VK_NUMLOCK) = 0) then
+      SetCapsLockKey(VK_NUMLOCK);
+    // Initialize some global variables
+    Started := false;
+    FindText := '';
+    ReplaceText := '';
+    // Get and display our LastPart if there is one
+    GetLastPart;
+    // Update our Machining Specifications
+    UpdateSpecs;
+  end;
+  memoHints.Height := 38;
+  memoHints.Text := 'Enter diameter tool length will be set from.';
+  memoHints.Lines.Add('Program will consider this dimension Z-Zero.');
+  LastActive := edtPartDiameter;
+  TEdit(Sender).SelectAll;
+  edtPartDiameter.SetFocus;
+end; // of procedure PartDiameterEnter
+
+procedure TFlatsForm.edtPartDiameterChange(Sender: TObject);
+begin
+  UpdateSpecs;
+end; // of procedure PartDiameterChange
+
+procedure TFlatsForm.edtPartDiameterExit(Sender: TObject);
+begin
+  Val(edtPartDiameter.Text, ThisPart.PartDiameter, ValResult);
+  if (ValResult <> 0) or not(InRange(ThisPart.PartDiameter, MinPartDiameter,
+    MaxPartDiameter)) then
+  begin
+    edtPartDiameter.Text := '';
+    ThisPart.PartDiameter := 0.0;
+  end else
+  begin
+    Str(ThisPart.PartDiameter: 2: 4, Temp);
+    edtPartDiameter.Text := Temp;
+  end;
+  UpdateSpecs;
+  edtPartDiameter.OnClick := edtPartDiameterClick;
+end; // of procedure PartDiameterExit
+
+//==============================================================================
+//=== AcrossFlats TEdit Box ====================================================
+//==============================================================================
+
+procedure TFlatsForm.edtAcrossFlatsEnter(Sender: TObject);
+begin
+  memoHints.Height := 22;
+  memoHints.Text := 'Enter Distance Across Flats specified on print.';
+  LastActive := edtAcrossFlats;
+end; // of procedure AcrossFlatsEnter
+
+procedure TFlatsForm.edtAcrossFlatsExit(Sender: TObject);
+begin
+  Val(edtAcrossFlats.Text, ThisPart.AcrossFlats, ValResult);
+  if (ValResult <> 0) or not(InRange(ThisPart.AcrossFlats, MinAcrossFlats,
+    ThisPart.PartDiameter)) then
+  begin
+    edtAcrossFlats.Text := '';
+    ThisPart.AcrossFlats := 0.0;
+  end else
+  begin
+    Str(ThisPart.AcrossFlats: 2: 4, Temp);
+    edtAcrossFlats.Text := Temp;
+  end;
+  UpdateSpecs;
+  edtAcrossFlats.OnClick := edtPartDiameterClick;
+end; // of procedure AcrossFlatsExit
+
+//==============================================================================
+//=== NumberOfFlats TEdit Box ==================================================
+//==============================================================================
+
+procedure TFlatsForm.edtNumberOfFlatsEnter(Sender: TObject);
+begin
+  memoHints.Height := 22;
+  memoHints.Text := 'Number Of Flats must be either 2 or 4.';
+  LastActive := edtNumberOfFlats;
+end; // of procedure NumberOfFlatsEnter
+
+procedure TFlatsForm.edtNumberOfFlatsExit(Sender: TObject);
+begin
+  Val(edtNumberOfFlats.Text, ThisPart.NumberOfFlats, ValResult);
+  if (ValResult <> 0) or not(edtNumberOfFlats.Text[1] in ['2', '4']) then
+  begin
+    edtNumberOfFlats.Text := '';
+    ThisPart.NumberOfFlats := 0;
+  end else
+    edtNumberOfFlats.Text := IntToStr(ThisPart.NumberOfFlats);
+  edtNumberOfFlats.OnClick := edtPartDiameterClick;
+end; // of procedure NumberOfFlatsExit
+
+//==============================================================================
+//=== ToolNumber TEdit Box =====================================================
+//==============================================================================
+
+procedure TFlatsForm.edtToolNumberEnter(Sender: TObject);
+begin
+  memoHints.Height := 54;
+  memoHints.Text := 'Enter tool number (1 thru 20)';
+  memoHints.Lines.Add('On The VF-3, Tool 14 is reserved for the Chamfer Tool');
+  memoHints.Lines.Add('On The VF-6, Tool 3 is reserved for the Chamfer Tool');
+  LastActive := edtToolNumber;
+end; // of procedure ToolNumberEnter
+
+procedure TFlatsForm.edtToolNumberExit(Sender: TObject);
+begin
+  Val(edtToolNumber.Text, ThisPart.ToolNumber, ValResult);
+  if (ValResult <> 0) or not(InRange(ThisPart.ToolNumber, 1, 20)) then
+  begin
+    edtToolNumber.Text := '';
+    ThisPart.ToolNumber := 0;
+  end else
+    edtToolNumber.Text := IntToStr(ThisPart.ToolNumber);
+  edtToolNumber.OnClick := edtPartDiameterClick;
+end; // of procedure ToolNumberExit
+
+//==============================================================================
+//=== CutterDiameter TEdit Box =================================================
+//==============================================================================
+
+procedure TFlatsForm.edtCutterDiameterEnter(Sender: TObject);
+begin
+  memoHints.Height := 22;
+  str(MinCutterDiameter: 0: 4, Temp);
+  TempText := 'Cutter Diameter must be between ' + Temp;
+  str(MaxCutterDiameter: 0: 4, Temp);
+  TempText := TempText + ' and ' + Temp;
+  memoHints.Text := TempText;
+  LastActive := edtCutterDiameter;
+end; // of procedure CutterDiameterEnter
+
+procedure TFlatsForm.edtCutterDiameterExit(Sender: TObject);
+begin
+  Val(edtCutterDiameter.Text, ThisPart.CutterDiameter, ValResult);
+  if (ValResult <> 0) or not(InRange(ThisPart.CutterDiameter, MinCutterDiameter,
+    MaxCutterDiameter)) then
+  begin
+    edtCutterDiameter.Text := '';
+    ThisPart.CutterDiameter := 0.0;
+  end else
+  begin
+    Str(ThisPart.CutterDiameter: 2: 4, Temp);
+    edtCutterDiameter.Text := Temp;
+  end;
+  UpdateSpecs;
+  edtCutterDiameter.OnClick := edtPartDiameterClick;
+end; // of procedure CutterDiameterExit
+
+//==============================================================================
+//=== XPos1 TEdit Box ==========================================================
+//==============================================================================
+
+procedure TFlatsForm.edtXPos1Enter(Sender: TObject);
+begin
+  edtXPos1.Color := clAqua;
+  memoHints.Height := 54;
+  memoHints.Text := 'Enter 1st X position where you want the tool to cut.';
+  memoHints.Lines.Add('* Positive or negative number *');
+  memoHints.Lines.Add('===>> CONSIDER TOOL RADIUS AND PART ' +
+    'ZERO WHEN ENTERING X POSITIONS <<===');
+  LastActive := edtXPos1;
+end; // of procedure XPos1Enter
+
+procedure TFlatsForm.edtXPos1Exit(Sender: TObject);
+begin
+  edtXPos1.Color := clWhite;
+  // check for and evaluate any arithmatic operations
+  edtXPos1.Text := ScanString(edtXpos1.Text);
+  Val(edtXPos1.Text, ThisPart.XPos1, ValResult);
+  if (ValResult <> 0) or (Abs(ThisPart.XPos1) > MaxXPosition)
+    or (ThisPart.XPos1 = 0) then
+  begin
+    edtXPos1.Text := '';
+    ThisPart.XPos1 := 0.0;
+  end else
+  begin
+    Str(ThisPart.XPos1: 2: 4, Temp);
+    while (length(Temp) < 8) do
+      Temp := ' ' + Temp;
+    edtXPos1.Text := Temp;
+  end;
+  UpdateSpecs;
+  edtXPos1.OnClick := edtPartDiameterClick;
+end; // of procedure XPos1Exit
+
+//==============================================================================
+//=== XPos2 TEdit Box ==========================================================
+//==============================================================================
+
+procedure TFlatsForm.edtXPos2Enter(Sender: TObject);
+begin
+  if (edtXPos1.Text = '') then
+  begin
+    edtXPos2.Text := '';
+    edtXPos1.SetFocus;
+    exit;
+  end;
+  edtXPos2.Color := clAqua;
+  memoHints.Height := 54;
+  memoHints.Text := 'Enter 2nd X Position where you the want tool to cut.';
+  if (edtXPos1.Text <> '') then
+  begin
+    if (pos('-',edtXPos1.Text) <> 0) then
+      Temp := 'Negative'
+    else
+      Temp := 'Positive';
+  end;
+  memoHints.Lines.Add('Enter a ' + Temp + ' number, or enter 0 for no step-over');
+  memoHints.Lines.Add('===>> CONSIDER TOOL RADIUS AND PART ' +
+    'ZERO WHEN ENTERING X POSITIONS <<===');
+  LastActive := edtXPos2;
+end; // of procedure XPos2Enter
+
+procedure TFlatsForm.edtXPos2Exit(Sender: TObject);
+begin
+  edtXPos2.Color := clWhite;
+  if (edtXPos2.Text <> '--none--') then
+  begin
+    // check for and evaluate any arithmatic operations
+    edtXPos2.Text := ScanString(edtXpos2.Text);
+    Val(edtXPos2.Text, ThisPart.XPos2, ValResult);
+    if (ValResult <> 0) or (Abs(ThisPart.XPos2) > MaxXposition) then
+    begin
+      edtXPos2.Text := '';
+      ThisPart.XPos2 := 0.0;
+    end else
+    begin
+      Str(ThisPart.XPos2: 2: 4, Temp);
+      if (ThisPart.XPos2 = 0) then
+        edtXPos2.Text := '--none--'
+      else
+      begin
+        while (length(Temp) < 8) do
+          Temp := ' ' + Temp;
+        edtXPos2.Text := Temp;
+      end;
+    end;
+  end; // of If (XPos2 <> '--none--'
+  UpdateSpecs;
+  edtXPos2.OnClick := edtPartDiameterClick;
+end; // of procedure XPos2Exit
+
+//==============================================================================
+//=== SpindleSpeed TEdit Box ===================================================
+//==============================================================================
+
+procedure TFlatsForm.edtSpindleSpeedEnter(Sender: TObject);
+begin
+  memoHints.Height := 38;
+  str(MinSpindleSpeed: 4, Temp);
+  TempText := 'Spindle speed can be between ' + Temp;
+  str(MaxSpindleSpeed: 4, Temp);
+  TempText := TempText + ' and ' + Temp;
+  memoHints.Text := TempText;
+  if (ThisPart.CutterDiameter > 0) then
+  begin
+    ThisPart.RPM := Round(650 / 0.262 / ThisPart.CutterDiameter);
+    Str(ThisPart.RPM, Temp);
+    memoHints.Lines.Add('Recommendation: ' + Temp);
+  end;
+  LastActive := edtSpindleSpeed;
+end; // of procedure SpindleSpeedEnter
+
+procedure TFlatsForm.edtSpindleSpeedExit(Sender: TObject);
+begin
+  Val(edtSpindleSpeed.Text, ThisPart.RPM, ValResult);
+  if (ValResult <> 0) or not(InRange(ThisPart.RPM, MinSpindleSpeed,
+    MaxSpindleSpeed)) then
+  begin
+    edtSpindleSpeed.Text := '';
+    ThisPart.RPM := 0;
+  end else
+    edtSpindleSpeed.Text := IntToStr(ThisPart.RPM);
+  UpdateFeedRate;
+  edtSpindleSpeed.OnClick := edtPartDiameterClick;
+end; // of procedure SpindleSpeedExit
+
+//==============================================================================
+//=== NumberOfEdges TEdit Box ==================================================
+//==============================================================================
+
+procedure TFlatsForm.edtNumberOfEdgesEnter(Sender: TObject);
+begin
+  memoHints.Height := 38;
+  str(MinNumberOfEdges: 2, Temp);
+  TempText := 'Number of edges on cutter (' + Temp;
+  str(MaxNumberOfEdges: 2, Temp);
+  TempText := TempText + ' to ' + Temp + ')';
+  memoHints.Text := TempText;
+  memoHints.Lines.Add('This info is needed to compute Feed Rate.');
+  LastActive := edtNumberOfEdges;
+end; // of procedure NumberOfEdgesEnter
+
+procedure TFlatsForm.edtNumberOfEdgesExit(Sender: TObject);
+begin
+  Val(edtNumberOfEdges.Text, ThisPart.NumberOfEdges, ValResult);
+  if (ValResult <> 0) or not(InRange(ThisPart.NumberOfEdges, MinNumberOfEdges,
+    MaxNumberOfEdges)) then
+  begin
+    edtNumberOfEdges.Text := '';
+    ThisPart.NumberOfEdges := 0;
+  end else
+    edtNumberOfEdges.Text := IntToStr(ThisPart.NumberOfEdges);
+  UpdateFeedRate;
+  edtNumberOfEdges.OnClick := edtPartDiameterClick;
+end; // of procedure NumberOfEdgesExit
+
+//==============================================================================
+//=== FeedPerEdge TEdit Box ====================================================
+//==============================================================================
+
+procedure TFlatsForm.edtFeedPerEdgeEnter(Sender: TObject);
+begin
+  memoHints.Height := 38;
+  str(MinFeedPerEdge + 0.0001: 0: 4, Temp);
+  TempText := 'Feed Per Edge must be between ' + Temp;
+  str(MaxFeedPerEdge: 0: 4, Temp);
+  TempText := TempText + ' and ' + Temp;
+  memoHints.Text := TempText;
+  memoHints.Lines.Add('.003 to .0075 recommended for most applications.');
+  LastActive := edtFeedPerEdge;
+end; // of procedure FeedPerEdgeEnter
+
+procedure TFlatsForm.edtFeedPerEdgeExit(Sender: TObject);
+begin
+  Val(edtFeedPerEdge.Text, ThisPart.FeedPerEdge, ValResult);
+  if (ValResult <> 0) or not(InRange(ThisPart.FeedPerEdge, MinFeedPerEdge,
+    MaxFeedPerEdge)) then
+  begin
+    edtFeedPerEdge.Text := '';
+    ThisPart.FeedPerEdge := 0.0;
+  end else
+  begin
+    Str(ThisPart.FeedPerEdge: 1: 4, Temp);
+    edtFeedPerEdge.Text := Temp;
+    Val(edtFeedRate.Text, ProgFeedRate, ValResult);
+  end;
+  UpdateFeedRate;
+  edtFeedPerEdge.OnClick := edtPartDiameterClick;
+end; // of procedure FeedPerEdgeExit
+
+//==============================================================================
+//=== DepthOfCut TEdit Box =====================================================
+//==============================================================================
+
+procedure TFlatsForm.edtDepthOfCutEnter(Sender: TObject);
+begin
+  memoHints.Height := 54;
+  str(MinDepthOfCut: 0: 4, Temp);
+  TempText := 'Depth of cut can be between ' + Temp;
+  str(MAxDepthOfCut: 0: 4, Temp);
+  TempText := TempText + ' and ' + Temp;
+  memoHints.Text := TempText;
+  memoHints.Lines.Add('.05 to .075 recommended for most applications.');
+  memoHints.Lines.Add('Last pass will adjust as required.');
+  if (ThisPart.PartDiameter > 0) and (ThisPart.AcrossFlats > 0) then
+    RecDOC(memoSpecs);
+  LastActive := edtDepthOfCut;
+end; // of procedure DepthOfCutEnter
+
+procedure TFlatsForm.edtDepthOfCutExit(Sender: TObject);
+begin
+  Val(edtDepthOfCut.Text, ThisPart.DepthOfCut, ValResult);
+  if (ValResult = 0) then ThisPart.DepthOfCut := Abs(ThisPart.DepthOfCut);
+  if not(InRange(ThisPart.DepthOfCut, MinDepthOfCut, MaxDepthOfCut)) then
+  begin
+    edtDepthOfCut.Text := '';
+    ThisPart.DepthOfCut := 0.0;
+  end else
+  begin
+    Str(ThisPart.DepthOfCut: 1: 4, Temp);
+    edtDepthOfCut.Text := Temp;
+  end;
+  UpdateSpecs;
+  edtDepthOfCut.OnClick := edtPartDiameterClick;
+end; // of procedure DepthOfCutExit
+
+//==============================================================================
+//=== WorkOffset TEdit Box =====================================================
+//==============================================================================
+
+procedure TFlatsForm.edtWorkOffsetEnter(Sender: TObject);
+begin
+  memoHints.Height := 22;
+  memoHints.Text := 'Enter number 4 thru 9 (For G54 thru G59)';
+  LastActive := edtWorkOffset;
+end; // of procedure WorkOffsetEnter
+
+procedure TFlatsForm.edtWorkOffsetExit(Sender: TObject);
+begin
+  if (Length(edtWorkOffset.Text) = 1) and (edtWorkOffset.Text[1] in ['4'..'9']) then
+  begin
+    Temp := edtWorkOffset.Text;
+    Val(Temp, ThisPart.WorkOffset, ValResult);
+  end else
+  begin
+    edtWorkOffset.Text := '';
+    ThisPart.WorkOffset := 0;
+  end;
+  edtWorkOffset.OnClick := edtPartDiameterClick;
+end; // of procedure WorkOffsetExit
+
+end.
